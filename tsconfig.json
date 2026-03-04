@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@bg/*": ["src/background/*"],
+      "@content/*": ["src/content/*"],
+      "@ui/*": ["src/content/ui/*"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}
