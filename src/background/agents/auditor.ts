@@ -42,11 +42,6 @@ export async function auditFeedback(
     };
   }
 
-  // ✅ TODO (YOU IMPLEMENT):
-  // If feedback.type === "got_it", bump mastery by +1 for this concept.
-  // Return the updated profile.
-  //
-  // Hint: const updated = await bumpMastery(concept, 1);
   if(feedback.type === "got_it"){
     const updated = await bumpMastery(concept, 1)
     return{
