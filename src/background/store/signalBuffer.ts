@@ -61,8 +61,8 @@ export function getContext(tabId: number): SignalContext {
   let maxDwell = 0;
   const hoverTerms: string[] = [];
   let lastHoverTerm: string | null = null;
-  let currentStreak = 0;
-  let maxHoverRepeats = 0;
+  let currentStreak = 0; //Counts how many times the same term appeared consecutively.
+  let maxHoverRepeats = 0; //Tracks the largest streak found so far
 
   for (const s of signals) {
     if (s.type === "backscroll") {
