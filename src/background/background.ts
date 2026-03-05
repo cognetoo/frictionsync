@@ -95,7 +95,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: false, error: "Unknown message type" });
   })();
 
-  // IMPORTANT: keep message channel open for async
+  // keep message channel open for async
   return true;
 });
 
