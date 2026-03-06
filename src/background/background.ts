@@ -9,6 +9,8 @@ import { auditFeedback, type FeedbackEvent } from "./agents/auditor";
 
 const lastConceptByTab = new Map<number, string>();
 
+const lastInterventionTime = new Map<number, number>();
+
 /**
  * Helper: send intervention to a specific tab's content script.
  */
@@ -16,7 +18,7 @@ async function sendIntervention(tabId: number, payload: any) {
   try {
     await chrome.tabs.sendMessage(tabId, { type: "FS_INTERVENTION", payload });
   } catch {
-    // happens on chrome:// pages or if content script not injected
+    
   }
 }
 
@@ -31,6 +33,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: false, error: "No tabId" });
       return;
     }
+
+    console.log("[FS] background service worker loaded");
 
     // ---- 1) SIGNALS: content script sends learning friction signals
     if (msg?.type === "FS_SIGNAL") {
@@ -63,6 +67,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return;
       }
 
+      const now = Date.now();
+      const last = lastInterventionTime.get(tabId) ?? 0;
+
+    if (now - last < 15000) {
+    console.log("[FS] intervention skipped due to cooldown", {
+        tabId,
+        concept: decision.concept,
+        waitMsRemaining: 15000 - (now - last)
+    });
+    sendResponse({ ok: true, skipped: "cooldown" });
+    return;
+    }
+
       // Run Agent B (Tutor) to generate a response
       const response = tutor({ concept: decision.concept }, profile);
       console.log("[FS] tutor response", response);
@@ -72,6 +89,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
       // Send intervention bubble to content script UI
       await sendIntervention(tabId, response);
+
+      lastInterventionTime.set(tabId, now);
+      clearTab(tabId);
 
       sendResponse({ ok: true, decision, response });
       return;
@@ -115,4 +135,5 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   clearTab(tabId);
   lastConceptByTab.delete(tabId);
+  lastInterventionTime.delete(tabId);
 });
