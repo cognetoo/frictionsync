@@ -1,5 +1,6 @@
 export type UserProfile = {
   enabled: boolean;
+   ghostOverlayEnabled: boolean;
   interests: string[];
   mastery: Record<string, number>; // concept -> score
   // later: preferred_style, difficulty, etc.
@@ -7,8 +8,10 @@ export type UserProfile = {
 
 const DEFAULT_PROFILE: UserProfile = {
   enabled: true,
-  interests: ["Clash Royale"],
-  mastery: {}
+  interests: ["Clash Royale","Yoga"],
+  mastery: {},
+     ghostOverlayEnabled: true,
+
 };
 
 const KEY = "frx_profile";
@@ -24,10 +27,14 @@ export async function getProfile(): Promise<UserProfile> {
   if (!p || typeof p !== "object") return structuredClone(DEFAULT_PROFILE);
 
   return {
-    enabled: typeof p.enabled === "boolean" ? p.enabled : DEFAULT_PROFILE.enabled,
-    interests: Array.isArray(p.interests) ? p.interests.filter(Boolean) : DEFAULT_PROFILE.interests,
-    mastery: p.mastery && typeof p.mastery === "object" ? p.mastery : {}
-  };
+  enabled: typeof p.enabled === "boolean" ? p.enabled : DEFAULT_PROFILE.enabled,
+  ghostOverlayEnabled:
+    typeof p.ghostOverlayEnabled === "boolean"
+      ? p.ghostOverlayEnabled
+      : DEFAULT_PROFILE.ghostOverlayEnabled,
+  interests: Array.isArray(p.interests) ? p.interests.filter(Boolean) : DEFAULT_PROFILE.interests,
+  mastery: p.mastery && typeof p.mastery === "object" ? p.mastery : {}
+};
 }
 
 /**

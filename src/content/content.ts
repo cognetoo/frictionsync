@@ -1,6 +1,7 @@
 import { startSensor, type SensorEvent } from "./sensor";
 import { showBubble } from "./ui/bubble";
 import { showGhostOverlay } from "./ui/ghostOverlay";
+import { getProfile } from "../background/store/profileStore";
 
 // Prevent duplicate initialization on the same page
 if ((window as any).__FS_LOADED__) {
@@ -16,7 +17,7 @@ if ((window as any).__FS_LOADED__) {
     try {
       chrome.runtime.sendMessage(message).catch(() => {});
     } catch {
-
+      // Extension context invalidated after reload; ignore
     }
   }
 
@@ -29,7 +30,7 @@ if ((window as any).__FS_LOADED__) {
   }
 
   /**
-   * Starts collecting signals.
+   * Start collecting signals.
    */
   startSensor(sendSignal);
 
@@ -48,6 +49,7 @@ if ((window as any).__FS_LOADED__) {
     };
 
     console.log("[FS] intervention", payload);
+    console.log("[FS] showing bubble for concept", payload.concept);
 
     // 1) Main floating bubble
     showBubble(payload, {
@@ -73,27 +75,37 @@ if ((window as any).__FS_LOADED__) {
       }
     });
 
-    // 2) Inline ghost overlay near matching concept text
-    console.log("[FS] showing ghost overlay for concept", payload.concept);
-    
-   showGhostOverlay(
-  {
-    concept: payload.concept,
-    explanation: payload.body
-  },
-  {
-    onSimplified: () => {
-      safeSendMessage({
-        type: "FS_FEEDBACK",
-        payload: {
-          type: "got_it",
-          t: Date.now(),
-          concept: payload.concept
+    // 2) Ghost overlay only if enabled in settings
+    (async () => {
+      const profile = await getProfile();
+
+      if (!profile.ghostOverlayEnabled) {
+        console.log("[FS] ghost overlay disabled in settings");
+        return;
+      }
+
+      console.log("[FS] showing ghost overlay for concept", payload.concept);
+
+      showGhostOverlay(
+        {
+          concept: payload.concept,
+          explanation: payload.body
+        },
+        {
+          onSimplified: () => {
+            console.log("[FS] ghost overlay sending feedback for", payload.concept);
+
+            safeSendMessage({
+              type: "FS_FEEDBACK",
+              payload: {
+                type: "got_it",
+                t: Date.now(),
+                concept: payload.concept
+              }
+            });
+          }
         }
-      });
-      console.log("[FS] ghost overlay sending feedback for", payload.concept);
-    }
-  }
-);
-});
+      );
+    })();
+  });
 }

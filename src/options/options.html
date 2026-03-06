@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FrictionSync Settings</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        background: #0f172a;
+        color: #f8fafc;
+      }
+
+      .page {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 32px 20px 60px;
+      }
+
+      .hero {
+        margin-bottom: 24px;
+      }
+
+      .title {
+        font-size: 30px;
+        font-weight: 800;
+        margin-bottom: 8px;
+      }
+
+      .subtitle {
+        font-size: 14px;
+        opacity: 0.75;
+        line-height: 1.5;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .card {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 18px;
+      }
+
+      .card-title {
+        font-size: 18px;
+        font-weight: 800;
+        margin-bottom: 14px;
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .row + .row {
+        margin-top: 14px;
+      }
+
+      .label {
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .sub {
+        font-size: 12px;
+        opacity: 0.72;
+        margin-top: 4px;
+        line-height: 1.4;
+      }
+
+      .input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.06);
+        color: white;
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-size: 14px;
+        outline: none;
+      }
+
+      .input::placeholder {
+        color: rgba(255,255,255,0.42);
+      }
+
+      .button {
+        border: none;
+        background: #38bdf8;
+        color: #082f49;
+        font-weight: 800;
+        border-radius: 12px;
+        padding: 11px 14px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+
+      .button:hover {
+        filter: brightness(0.96);
+      }
+
+      .button.secondary {
+        background: rgba(255,255,255,0.08);
+        color: #f8fafc;
+      }
+
+      .button.danger {
+        background: #ef4444;
+        color: white;
+      }
+
+      .pill-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .pill {
+        background: rgba(255,255,255,0.07);
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+
+      .muted {
+        font-size: 13px;
+        opacity: 0.7;
+      }
+
+      .coming {
+        display: inline-block;
+        margin-left: 8px;
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(56, 189, 248, 0.14);
+        color: #7dd3fc;
+      }
+
+      .divider {
+        height: 1px;
+        background: rgba(255,255,255,0.08);
+        margin: 18px 0;
+      }
+
+      input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+      }
+
+      .footer-note {
+        margin-top: 22px;
+        font-size: 12px;
+        opacity: 0.65;
+        line-height: 1.5;
+      }
+
+      @media (min-width: 760px) {
+        .grid {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .card.span-2 {
+          grid-column: span 2;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="page">
+      <div class="hero">
+        <div class="title">FrictionSync Settings</div>
+        <div class="subtitle">
+          Configure how FrictionSync detects learning friction, personalizes tutoring,
+          and tracks mastery over time.
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <div class="card-title">General</div>
+
+          <div class="row">
+            <div>
+              <div class="label">Enable interventions</div>
+              <div class="sub">Turn FrictionSync on or off during browsing.</div>
+            </div>
+            <input id="enabledToggle" type="checkbox" />
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="row">
+            <div>
+              <div class="label">Ghost Overlay</div>
+              <div class="sub">Allow inline simplify chips and text morphing.</div>
+            </div>
+            <input id="ghostOverlayToggle" type="checkbox" />
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Interests</div>
+
+          <input
+            id="interestsInput"
+            class="input"
+            type="text"
+            placeholder="e.g. Clash Royale, Yoga, Football"
+          />
+          <div style="height: 10px"></div>
+          <div class="muted">Separate multiple interests with commas.</div>
+          <div style="height: 12px"></div>
+          <button id="saveInterestsBtn" class="button">Save interests</button>
+        </div>
+
+        <div class="card span-2">
+          <div class="card-title">Mastery overview</div>
+          <div id="masteryList" class="pill-list">
+            <div class="muted">No mastery data yet.</div>
+          </div>
+          <div style="height: 14px"></div>
+          <button id="resetMasteryBtn" class="button danger">Reset mastery</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            Tutor model
+            <span class="coming">Coming later</span>
+          </div>
+          <div class="muted">
+            Later you’ll be able to choose whether tutoring uses deterministic templates
+            or an AI model for better explanations.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            Advanced sensing
+            <span class="coming">Later roadmap</span>
+          </div>
+          <div class="muted">
+            Gaze tracking, dead clicks, rage clicks, and stronger term filtering
+            will be added in later iterations.
+          </div>
+          <div class="muted">Future versions will also filter weak terms like “is”, “and”, and “from”.</div>
+        </div>
+      </div>
+
+      <div class="footer-note">
+        FrictionSync currently uses local-first storage in the browser. Your interests
+        and mastery state remain local to this extension during MVP development.
+      </div>
+    </div>
+
+    <script type="module" src="./options.ts"></script>
+  </body>
+</html>
