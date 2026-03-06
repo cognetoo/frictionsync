@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FrictionSync</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 14px;
+        width: 320px;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        background: #0f172a;
+        color: #f8fafc;
+      }
+
+      .card {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .title {
+        font-size: 18px;
+        font-weight: 800;
+      }
+
+      .subtitle {
+        font-size: 12px;
+        opacity: 0.75;
+        margin-top: 2px;
+      }
+
+      .section {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px;
+        padding: 12px;
+      }
+
+      .section-title {
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 10px;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .toggle-label {
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .toggle-sub {
+        font-size: 11px;
+        opacity: 0.7;
+        margin-top: 2px;
+      }
+
+      .input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.06);
+        color: white;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 13px;
+        outline: none;
+      }
+
+      .input::placeholder {
+        color: rgba(255,255,255,0.45);
+      }
+
+      .button {
+        border: none;
+        background: #38bdf8;
+        color: #082f49;
+        font-weight: 800;
+        border-radius: 10px;
+        padding: 10px 12px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+
+      .button:hover {
+        filter: brightness(0.96);
+      }
+
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(255,255,255,0.07);
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+
+      .muted {
+        font-size: 12px;
+        opacity: 0.7;
+      }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .link-btn {
+        background: transparent;
+        color: #7dd3fc;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        font-size: 12px;
+      }
+
+      input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+      <div>
+        <div class="title">FrictionSync</div>
+        <div class="subtitle">Your learning friction copilot</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">System</div>
+        <div class="row">
+          <div>
+            <div class="toggle-label">Enable interventions</div>
+            <div class="toggle-sub">Turn FrictionSync on or off for browsing</div>
+          </div>
+          <input id="enabledToggle" type="checkbox" />
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Interests</div>
+        <input
+          id="interestsInput"
+          class="input"
+          type="text"
+          placeholder="e.g. Clash Royale, Yoga, Football"
+        />
+        <div style="height: 10px"></div>
+        <button id="saveInterestsBtn" class="button">Save interests</button>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Top mastery</div>
+        <div id="masteryList" class="list">
+          <div class="muted">No mastery data yet.</div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <button id="openOptionsBtn" class="link-btn">Open settings</button>
+        <button id="resetMasteryBtn" class="link-btn">Reset mastery</button>
+      </div>
+    </div>
+
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>
