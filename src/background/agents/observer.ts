@@ -16,8 +16,8 @@ export type ObserverConfig = {
 };
 
 export const DEFAULT_OBSERVER_CONFIG: ObserverConfig = {
-  threshold: 0.7,
-  dwellMsHigh: 35000,
+  threshold: 0.65,
+  dwellMsHigh: 30000,
   backscrollHigh: 2,
   hoverRepeatsHigh: 3
 };

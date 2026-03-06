@@ -13,6 +13,8 @@ type BubbleCallbacks = {
 
 let rootHost: HTMLDivElement | null = null;
 
+let removeEscListener: (() => void) | null = null;
+
 /**
  * Show a floating bubble on the page with Shadow DOM isolation.
  */
@@ -26,7 +28,11 @@ export function showBubble(payload: BubblePayload, cb: BubbleCallbacks) {
   rootHost.style.right = "16px";
   rootHost.style.bottom = "16px";
   rootHost.style.zIndex = "2147483647"; // above everything
-  rootHost.style.all = "initial"; // prevent page css interference
+  rootHost.style.pointerEvents = "auto";
+  rootHost.style.display = "block";
+
+// TEMP DEBUG 
+rootHost.style.outline = "2px solid red";
 
   const shadow = rootHost.attachShadow({ mode: "open" });
 
@@ -79,6 +85,10 @@ export function showBubble(payload: BubblePayload, cb: BubbleCallbacks) {
  * Remove bubble if it exists.
  */
 export function cleanup() {
+  if (removeEscListener) {
+    removeEscListener();
+    removeEscListener = null;
+  }
   if (rootHost) {
     rootHost.remove();
     rootHost = null;
@@ -188,27 +198,10 @@ function getCss(): string {
 function attachEscapeToClose(cb: BubbleCallbacks) {
   const handler = (e: KeyboardEvent) => {
     if (e.key !== "Escape") return;
-
-    // user dismissed using keyboard
     cb.onDismiss();
-
-    // remove bubble
     cleanup();
-
-   // remove this listener so it doesn't stay forever
-    document.removeEventListener("keydown", handler);
   };
 
   document.addEventListener("keydown", handler);
-
-  // Also: if bubble is removed by clicking X or Got it, we should remove listener too.
-  // We do that by monkey-patching cleanup for this instance.
-  // (Simple way without introducing global state.)
-  const originalCleanup = cleanup;
-  (cleanup as any) = () => {
-    document.removeEventListener("keydown", handler);
-    originalCleanup();
-    // restore cleanup back
-    (cleanup as any) = originalCleanup;
-  };
+  removeEscListener = () => document.removeEventListener("keydown", handler);
 }

@@ -1,5 +1,5 @@
 import { startSensor, type SensorEvent } from "./sensor";
-import { showBubble } from "./ui/bubble";
+import { showBubble } from "./ui/bubble"
 
 /**
  * Send a sensor event to background.
@@ -29,22 +29,30 @@ chrome.runtime.onMessage.addListener((msg) => {
     concept: string;
     styleTag: string;
   };
-  
+
   console.log("[FS] intervention", payload);
 
   // Show the UI bubble and wire feedback callbacks.
   showBubble(payload, {
-    onGotIt: () => {
-      chrome.runtime.sendMessage({
-        type: "FS_FEEDBACK",
-        payload: { type: "got_it", t: Date.now() }
-      });
-    },
-    onDismiss: () => {
-      chrome.runtime.sendMessage({
-        type: "FS_FEEDBACK",
-        payload: { type: "dismissed", t: Date.now() }
-      });
+  onGotIt: () => {
+  chrome.runtime.sendMessage({
+    type: "FS_FEEDBACK",
+    payload: {
+      type: "got_it",
+      t: Date.now(),
+      concept: payload.concept
     }
+  });
+},
+onDismiss: () => {
+  chrome.runtime.sendMessage({
+    type: "FS_FEEDBACK",
+    payload: {
+      type: "dismissed",
+      t: Date.now(),
+      concept: payload.concept
+    }
+  });
+}
   });
 });

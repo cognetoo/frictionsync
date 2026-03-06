@@ -25,9 +25,9 @@ const manifest: ManifestV3Export = {
     }
   ],
   icons: {
-    "16": "public/icon16.png",
-    "48": "public/icon48.png",
-    "128": "public/icon128.png"
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
   }
 };
 

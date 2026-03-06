@@ -49,8 +49,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       // Build summarized context for the Observer
       const ctx = getContext(tabId);
 
+      console.log("[FS] got signal", { tabId, signal });
+      console.log("[FS] ctx", getContext(tabId));
+
       // Run Agent A (Observer)
       const decision = observe(ctx);
+
+      console.log("[FS] observer decision", decision);
 
       // If no intervention needed, stop.
       if (!decision.shouldIntervene || !decision.concept) {
@@ -60,6 +65,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
       // Run Agent B (Tutor) to generate a response
       const response = tutor({ concept: decision.concept }, profile);
+      console.log("[FS] tutor response", response);
 
       // Remember last concept for this tab (so feedback updates correct mastery)
       lastConceptByTab.set(tabId, response.concept);
@@ -73,12 +79,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     // ---- 2) FEEDBACK: content script bubble sends user action ("Got it", dismissed)
     if (msg?.type === "FS_FEEDBACK") {
-      const feedback: FeedbackEvent = msg.payload;
+    const feedback = msg.payload as FeedbackEvent & { concept?: string };
+    const concept = feedback.concept ?? lastConceptByTab.get(tabId) ?? null;
 
-      const concept = lastConceptByTab.get(tabId) ?? null;
+
+      console.log("[FS] feedback", { tabId, feedback, concept });
 
       // Run Agent C (Auditor) to update mastery
       const audit = await auditFeedback(feedback, concept);
+
+      console.log("[FS] audit result", audit);
 
       sendResponse({ ok: true, audit });
       return;
