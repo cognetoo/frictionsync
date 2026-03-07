@@ -2,6 +2,8 @@ import type { UserProfile } from "../store/profileStore";
 
 import { fetchTutorExplanation } from "./tutorClient";
 
+import { buildTutorCacheKey,getCachedTutorBody, setCachedTutorBody, getPendingTutorRequest, setPendingTutorRequest, clearPendingTutorRequest} from "@bg/store/tutorCache";
+
 export type TutorRequest = {
   concept: string;
   pageTitle?: string;
@@ -40,8 +42,61 @@ export async function tutor(
       ? `Quick check: ${concept}`
       : `Quick help: ${concept}`;
 
-  // AI path
-  const aiBody = await tryGenerateWithAI({
+  const cacheKey = buildTutorCacheKey({
+    concept,
+    masteryBand,
+    pageTitle: req.pageTitle,
+    sentenceContext: req.sentenceContext
+  });
+
+  const cachedBody = getCachedTutorBody(cacheKey);
+  if (cachedBody) {
+    console.log("[FS] tutor cache hit", {
+      concept,
+      masteryBand,
+      pageTitle: req.pageTitle ?? "unknown"
+    });
+
+    return {
+      title,
+      body: cachedBody,
+      cta: "Got it!",
+      concept,
+      styleTag: "ai_cached",
+      masteryBand,
+      source: "ai"
+    };
+  }
+
+console.log("[FS] tutor cache miss", {
+    concept,
+    masteryBand,
+    pageTitle: req.pageTitle ?? "unknown"
+  });
+
+  const pendingRequest = getPendingTutorRequest(cacheKey);
+  if (pendingRequest) {
+    console.log("[FS] tutor pending request hit", {
+      concept,
+      masteryBand,
+      pageTitle: req.pageTitle ?? "unknown"
+    });
+
+    const pendingBody = await pendingRequest;
+    if (pendingBody) {
+      return {
+        title,
+        body: pendingBody,
+        cta: "Got it!",
+        concept,
+        styleTag: "ai_cached",
+        masteryBand,
+        source: "ai"
+      };
+    }
+  }
+
+  const aiPromise = tryGenerateWithAI({
     concept,
     interests: profile.interests,
     mastery,
@@ -51,7 +106,18 @@ export async function tutor(
     sentenceContext: req.sentenceContext
   });
 
+  setPendingTutorRequest(cacheKey, aiPromise);
+
+  let aiBody: string | null = null;
+  try{
+    aiBody = await aiPromise;
+  }finally{
+    clearPendingTutorRequest(cacheKey);
+  }
+
   if (aiBody) {
+    setCachedTutorBody(cacheKey, aiBody);
+
     return {
       title,
       body: aiBody,
@@ -63,7 +129,6 @@ export async function tutor(
     };
   }
 
-  // Fallback path
   const fallbackStyle = pickFallbackStyle(profile.interests, masteryBand);
   const fallbackBody = buildFallbackExplanation(
     concept,

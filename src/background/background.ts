@@ -19,6 +19,8 @@ const  lastResolvedConceptByTab = new Map<number, string>();
 
 const lastResolvedConceptTimeByTab = new Map<number, number>();
 
+const activeInterventionKeyByTab = new Map<number, string>();
+
 const SAME_CONCEPT_SUPPRESSION_MS = 30000;
 
 const RESOLVED_CONCEPT_SUPPRESSION_MS = 60000;
@@ -69,6 +71,13 @@ function findSentenceContextForConcept(
     }
 
     return out;
+  }
+
+  function buildInterventionKey(payload: {
+    concept: string;
+    body: string;
+  }): string {
+    return `${payload.concept.trim().toLowerCase()}::${payload.body.trim()}`;
   }
 
 /**
@@ -187,21 +196,43 @@ const lastResolvedTime = lastResolvedConceptTimeByTab.get(tabId) ?? 0;
         contextTerms,
         sentenceContext
       });
-      const response = await tutor({ concept: decision.concept,pageTitle,contextTerms,sentenceContext}, profile);
+      const response = await tutor(
+        { concept: decision.concept, pageTitle, contextTerms, sentenceContext },
+        profile
+      );
       console.log("[FS] tutor response", response);
 
-      // Remember last concept for this tab (so feedback updates correct mastery)
-      lastConceptByTab.set(tabId, response.concept);
-      lastExplainedConceptByTab.set(tabId,response.concept);
-      lastConceptExplainTimeByTab.set(tabId,now);
+      const interventionKey = buildInterventionKey({
+        concept: response.concept,
+        body: response.body
+      });
 
-      // Send intervention bubble to content script UI
-      await sendIntervention(tabId, response);
+      const activeKey = activeInterventionKeyByTab.get(tabId) ?? null;
+      if (activeKey === interventionKey) {
+        console.log("[FS] duplicate intervention suppressed", {
+          tabId,
+          concept: response.concept
+        });
 
-      lastInterventionTime.set(tabId, now);
-      clearTab(tabId);
+        sendResponse({ ok: true, skipped: "duplicate_intervention" });
+        return;
+      }
 
-      sendResponse({ ok: true, decision, response });
+        // Remember last concept for this tab (so feedback updates correct mastery)
+        lastConceptByTab.set(tabId, response.concept);
+        lastExplainedConceptByTab.set(tabId, response.concept);
+        lastConceptExplainTimeByTab.set(tabId, now);
+
+        // Mark this intervention as active before sending
+        activeInterventionKeyByTab.set(tabId, interventionKey);
+
+        // Send intervention bubble to content script UI
+        await sendIntervention(tabId, response);
+
+        lastInterventionTime.set(tabId, now);
+        clearTab(tabId);
+
+        sendResponse({ ok: true, decision, response });
       return;
     }
 
@@ -227,6 +258,8 @@ const lastResolvedTime = lastResolvedConceptTimeByTab.get(tabId) ?? 0;
     }
       console.log("[FS] audit result", audit);
 
+      activeInterventionKeyByTab.delete(tabId);
+
       sendResponse({ ok: true, audit });
       return;
     }
@@ -240,6 +273,7 @@ const lastResolvedTime = lastResolvedConceptTimeByTab.get(tabId) ?? 0;
       lastConceptExplainTimeByTab.delete(tabId);
       lastResolvedConceptByTab.delete(tabId);
       lastResolvedConceptTimeByTab.delete(tabId);
+      activeInterventionKeyByTab.delete(tabId);
       sendResponse({ ok: true });
       return;
     }
@@ -262,4 +296,5 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   lastConceptExplainTimeByTab.delete(tabId);
   lastResolvedConceptByTab.delete(tabId);
   lastResolvedConceptTimeByTab.delete(tabId);
+  activeInterventionKeyByTab.delete(tabId);
 });
