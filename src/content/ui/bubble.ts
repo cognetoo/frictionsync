@@ -12,46 +12,47 @@ type BubbleCallbacks = {
 };
 
 let rootHost: HTMLDivElement | null = null;
-
 let removeEscListener: (() => void) | null = null;
+let activeContainer: HTMLDivElement | null = null;
+let isClosing = false;
 
 /**
  * Show a floating bubble on the page with Shadow DOM isolation.
  */
 export function showBubble(payload: BubblePayload, cb: BubbleCallbacks) {
-  // If already shown, remove old one first
-  cleanup();
+  cleanup(true);
 
   rootHost = document.createElement("div");
   rootHost.id = "fs-root-host";
   rootHost.style.position = "fixed";
-  rootHost.style.right = "16px";
-  rootHost.style.bottom = "16px";
-  rootHost.style.zIndex = "2147483647"; // above everything
+  rootHost.style.right = "20px";
+  rootHost.style.bottom = "20px";
+  rootHost.style.zIndex = "2147483647";
   rootHost.style.pointerEvents = "auto";
   rootHost.style.display = "block";
-
-// TEMP DEBUG 
-rootHost.style.outline = "2px solid red";
 
   const shadow = rootHost.attachShadow({ mode: "open" });
 
   const container = document.createElement("div");
   container.className = "fs-card";
+  activeContainer = container;
 
   container.innerHTML = `
+    <div class="fs-glow"></div>
+
     <div class="fs-header">
-      <div class="fs-title">${escapeHtml(payload.title)}</div>
-      <button class="fs-x" title="Dismiss">✕</button>
+      <div class="fs-badge">FrictionSync</div>
+      <button class="fs-x" title="Dismiss" aria-label="Dismiss">✕</button>
     </div>
 
-    <div class="fs-body">
-      ${formatBody(payload.body)}
+    <div class="fs-main">
+      <div class="fs-title">${escapeHtml(payload.title)}</div>
+      <div class="fs-body">${formatBody(payload.body)}</div>
     </div>
 
     <div class="fs-footer">
-      <button class="fs-btn fs-gotit">${escapeHtml(payload.cta)}</button>
-      <div class="fs-meta">${escapeHtml(payload.styleTag)}</div>
+      <button class="fs-btn fs-secondary" type="button">Dismiss</button>
+      <button class="fs-btn fs-primary" type="button">${escapeHtml(payload.cta)}</button>
     </div>
   `;
 
@@ -60,48 +61,76 @@ rootHost.style.outline = "2px solid red";
 
   shadow.appendChild(style);
   shadow.appendChild(container);
-
   document.documentElement.appendChild(rootHost);
 
-  // Wire actions
   const xBtn = shadow.querySelector(".fs-x") as HTMLButtonElement | null;
-  const gotBtn = shadow.querySelector(".fs-gotit") as HTMLButtonElement | null;
+  const dismissBtn = shadow.querySelector(".fs-secondary") as HTMLButtonElement | null;
+  const gotBtn = shadow.querySelector(".fs-primary") as HTMLButtonElement | null;
 
-  xBtn?.addEventListener("click", () => {
+  const dismiss = () => {
     cb.onDismiss();
-    cleanup();
-  });
+    closeBubble();
+  };
 
-  gotBtn?.addEventListener("click", () => {
+  const gotIt = () => {
     cb.onGotIt();
-    cleanup();
-  });
+    closeBubble();
+  };
 
- 
+  xBtn?.addEventListener("click", dismiss);
+  dismissBtn?.addEventListener("click", dismiss);
+  gotBtn?.addEventListener("click", gotIt);
+
   attachEscapeToClose(cb);
+
+  requestAnimationFrame(() => {
+    container.classList.add("fs-show");
+  });
+}
+
+function closeBubble() {
+  if (!activeContainer || isClosing) return;
+  isClosing = true;
+
+  activeContainer.classList.remove("fs-show");
+  activeContainer.classList.add("fs-hide");
+
+  window.setTimeout(() => {
+    cleanup(true);
+  }, 220);
 }
 
 /**
  * Remove bubble if it exists.
  */
-export function cleanup() {
+export function cleanup(skipAnimation = false) {
   if (removeEscListener) {
     removeEscListener();
     removeEscListener = null;
   }
-  if (rootHost) {
-    rootHost.remove();
-    rootHost = null;
+
+  if (!rootHost) {
+    activeContainer = null;
+    isClosing = false;
+    return;
   }
+
+  if (!skipAnimation && activeContainer && !isClosing) {
+    closeBubble();
+    return;
+  }
+
+  rootHost.remove();
+  rootHost = null;
+  activeContainer = null;
+  isClosing = false;
 }
 
-
 function formatBody(text: string): string {
-  // escape first
-  const safe = escapeHtml(text);
-
-  // very tiny markdown: **bold**
-  return safe.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  const safe = escapeHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\n/g, "<br>");
+  return safe;
 }
 
 /**
@@ -118,88 +147,210 @@ function escapeHtml(s: string): string {
 
 function getCss(): string {
   return `
-    .fs-card{
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      width: 340px;
-      background: #111827;
-      color: #F9FAFB;
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 14px;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.35);
-      padding: 12px;
+    :host {
+      all: initial;
     }
 
-    .fs-header{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap: 8px;
+    .fs-card {
+      position: relative;
+      overflow: hidden;
+      width: 372px;
+      max-width: min(372px, calc(100vw - 24px));
+      box-sizing: border-box;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(248,250,252,0.97) 100%);
+      color: #0f172a;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      border-radius: 20px;
+      box-shadow:
+        0 20px 50px rgba(2, 6, 23, 0.18),
+        0 8px 20px rgba(2, 6, 23, 0.10);
+      padding: 14px;
+      backdrop-filter: blur(14px);
+      transform: translateY(18px) scale(0.98);
+      opacity: 0;
+      transition:
+        transform 180ms ease,
+        opacity 180ms ease,
+        box-shadow 180ms ease;
+    }
+
+    .fs-card.fs-show {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+
+    .fs-card.fs-hide {
+      transform: translateY(12px) scale(0.985);
+      opacity: 0;
+    }
+
+    .fs-card:hover {
+      box-shadow:
+        0 24px 56px rgba(2, 6, 23, 0.20),
+        0 10px 24px rgba(2, 6, 23, 0.12);
+    }
+
+    .fs-glow {
+      position: absolute;
+      inset: -40% auto auto -20%;
+      width: 180px;
+      height: 180px;
+      background: radial-gradient(circle, rgba(56,189,248,0.18), rgba(56,189,248,0));
+      pointer-events: none;
+    }
+
+    .fs-header {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .fs-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(14, 165, 233, 0.10);
+      color: #0369a1;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .fs-x {
+      all: unset;
+      box-sizing: border-box;
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      color: rgba(15, 23, 42, 0.65);
+      transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+    }
+
+    .fs-x:hover {
+      background: rgba(15, 23, 42, 0.06);
+      color: rgba(15, 23, 42, 0.92);
+      transform: scale(1.03);
+    }
+
+    .fs-main {
+      position: relative;
+      z-index: 1;
+      margin-bottom: 14px;
+    }
+
+    .fs-title {
+      font-size: 17px;
+      font-weight: 750;
+      line-height: 1.28;
+      letter-spacing: -0.01em;
+      color: #020617;
       margin-bottom: 8px;
     }
 
-    .fs-title{
+    .fs-body {
       font-size: 14px;
-      font-weight: 700;
-      line-height: 1.2;
+      line-height: 1.62;
+      color: #334155;
     }
 
-    .fs-x{
-      all: unset;
-      cursor: pointer;
-      width: 28px;
-      height: 28px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      border-radius: 8px;
-      color: rgba(255,255,255,0.8);
-    }
-    .fs-x:hover{
-      background: rgba(255,255,255,0.10);
+    .fs-body strong {
+      color: #0f172a;
+      font-weight: 750;
     }
 
-    .fs-body{
-      font-size: 13px;
-      line-height: 1.45;
-      color: rgba(255,255,255,0.92);
-      margin-bottom: 10px;
-      white-space: pre-wrap;
-    }
-
-    .fs-footer{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
+    .fs-footer {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
       gap: 10px;
     }
 
-    .fs-btn{
+    .fs-btn {
       all: unset;
+      box-sizing: border-box;
       cursor: pointer;
-      padding: 8px 10px;
-      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 88px;
+      padding: 10px 14px;
+      border-radius: 12px;
       font-size: 13px;
       font-weight: 700;
-      background: #22C55E;
-      color: #052e16;
-    }
-    .fs-btn:hover{
-      filter: brightness(0.95);
+      transition:
+        transform 140ms ease,
+        background 140ms ease,
+        box-shadow 140ms ease,
+        border-color 140ms ease;
     }
 
-    .fs-meta{
-      font-size: 11px;
-      opacity: 0.65;
+    .fs-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .fs-btn:active {
+      transform: translateY(0);
+    }
+
+    .fs-secondary {
+      background: rgba(15, 23, 42, 0.05);
+      color: #334155;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+    }
+
+    .fs-secondary:hover {
+      background: rgba(15, 23, 42, 0.08);
+    }
+
+    .fs-primary {
+      background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+      color: white;
+      box-shadow: 0 8px 18px rgba(34, 197, 94, 0.28);
+    }
+
+    .fs-primary:hover {
+      box-shadow: 0 10px 22px rgba(34, 197, 94, 0.34);
+      filter: brightness(1.01);
+    }
+
+    @media (max-width: 480px) {
+      .fs-card {
+        width: min(372px, calc(100vw - 16px));
+        border-radius: 18px;
+        padding: 13px;
+      }
+
+      .fs-title {
+        font-size: 16px;
+      }
+
+      .fs-body {
+        font-size: 13px;
+      }
     }
   `;
 }
-
 
 function attachEscapeToClose(cb: BubbleCallbacks) {
   const handler = (e: KeyboardEvent) => {
     if (e.key !== "Escape") return;
     cb.onDismiss();
-    cleanup();
+    closeBubble();
   };
 
   document.addEventListener("keydown", handler);

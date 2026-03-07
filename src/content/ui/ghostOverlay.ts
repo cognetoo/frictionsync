@@ -42,8 +42,8 @@ export function showGhostOverlay(
   ghostChipHost = document.createElement("div");
   ghostChipHost.id = "fs-ghost-chip";
   ghostChipHost.style.position = "fixed";
-  ghostChipHost.style.left = `${Math.min(rect.right + 8, window.innerWidth - 120)}px`;
-  ghostChipHost.style.top = `${Math.max(rect.top - 4, 8)}px`;
+  ghostChipHost.style.left = `${Math.min(rect.right + 10, window.innerWidth - 150)}px`;
+  ghostChipHost.style.top = `${Math.max(rect.top - 6, 10)}px`;
   ghostChipHost.style.zIndex = "2147483647";
   ghostChipHost.style.pointerEvents = "auto";
 
@@ -53,43 +53,85 @@ export function showGhostOverlay(
   style.textContent = `
     .chip {
       all: initial;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      box-sizing: border-box;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      background: #38bdf8;
-      color: #082f49;
+      gap: 8px;
+      padding: 8px 12px;
       border-radius: 999px;
-      padding: 6px 10px;
-      font-size: 12px;
-      font-weight: 700;
+      background: rgba(255, 255, 255, 0.96);
+      color: #0f172a;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow:
+        0 14px 34px rgba(2, 6, 23, 0.16),
+        0 6px 14px rgba(2, 6, 23, 0.08);
+      backdrop-filter: blur(10px);
       cursor: pointer;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+      transform: translateY(8px) scale(0.98);
+      opacity: 0;
+      transition:
+        transform 150ms ease,
+        opacity 150ms ease,
+        box-shadow 150ms ease,
+        background 150ms ease;
+    }
+
+    .chip.show {
+      transform: translateY(0) scale(1);
+      opacity: 1;
     }
 
     .chip:hover {
-      filter: brightness(0.96);
+      box-shadow:
+        0 16px 38px rgba(2, 6, 23, 0.18),
+        0 8px 18px rgba(2, 6, 23, 0.10);
+      background: rgba(255, 255, 255, 1);
+    }
+
+    .label {
+      all: initial;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      color: #0369a1;
+      letter-spacing: 0.01em;
     }
 
     .close {
       all: unset;
       cursor: pointer;
+      width: 20px;
+      height: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      color: rgba(15, 23, 42, 0.55);
       font-size: 12px;
       line-height: 1;
-      opacity: 0.75;
+    }
+
+    .close:hover {
+      background: rgba(15, 23, 42, 0.07);
+      color: rgba(15, 23, 42, 0.88);
     }
   `;
 
   const chip = document.createElement("div");
   chip.className = "chip";
   chip.innerHTML = `
-    <span>Simplify</span>
-    <button class="close" title="Dismiss">✕</button>
+    <span class="label">Simplify</span>
+    <button class="close" title="Dismiss" aria-label="Dismiss">✕</button>
   `;
 
   shadow.appendChild(style);
   shadow.appendChild(chip);
   document.documentElement.appendChild(ghostChipHost);
+
+  requestAnimationFrame(() => {
+    chip.classList.add("show");
+  });
 
   chip.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
@@ -120,6 +162,7 @@ export function cleanupGhostOverlay() {
     activeSentenceSpan.style.background = "";
     activeSentenceSpan.style.borderRadius = "";
     activeSentenceSpan.style.padding = "";
+    activeSentenceSpan.style.boxShadow = "";
     activeSentenceSpan = null;
   }
 }
@@ -152,7 +195,6 @@ function findBestSentenceMatch(
   const needle = concept.trim().toLowerCase();
   if (!needle) return null;
 
-  // 1) Try exact sentence near the hover point first
   if (anchor) {
     const direct = findSentenceFromAnchor(anchor, needle);
     if (direct) {
@@ -166,7 +208,6 @@ function findBestSentenceMatch(
     }
   }
 
-  // 2) Fallback: nearest matching visible sentence
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   let node: Node | null;
 
@@ -223,7 +264,6 @@ function findBestSentenceMatch(
   };
 }
 
-
 function findSentenceFromAnchor(
   anchor: HoverAnchor,
   concept: string
@@ -232,8 +272,8 @@ function findSentenceFromAnchor(
   sentenceStart: number;
   sentenceEnd: number;
 } | null {
+  console.log("[FS] trying anchor-based match", anchor, concept);
 
-    console.log("[FS] trying anchor-based match",anchor, concept)
   const range =
     (document as any).caretRangeFromPoint?.(anchor.x, anchor.y) ??
     (document as any).caretPositionFromPoint?.(anchor.x, anchor.y);
@@ -243,7 +283,6 @@ function findSentenceFromAnchor(
   let textNode: Text | null = null;
   let offset = 0;
 
-  // caretRangeFromPoint branch
   if ((range as Range).startContainer) {
     const node = (range as Range).startContainer;
     if (node.nodeType === Node.TEXT_NODE) {
@@ -252,7 +291,6 @@ function findSentenceFromAnchor(
     }
   }
 
-  // caretPositionFromPoint branch
   if (!textNode && (range as any).offsetNode) {
     const node = (range as any).offsetNode as Node;
     if (node.nodeType === Node.TEXT_NODE) {
@@ -266,14 +304,8 @@ function findSentenceFromAnchor(
   const raw = textNode.textContent || "";
   const lower = raw.toLowerCase();
 
-  // Prefer sentence around the actual hover offset if it contains the concept
   let idx = lower.indexOf(concept, Math.max(0, offset - 20));
-
-  // fallback: any concept occurrence in this text node
-  if (idx === -1) {
-    idx = lower.indexOf(concept);
-  }
-
+  if (idx === -1) idx = lower.indexOf(concept);
   if (idx === -1) return null;
 
   const bounds = getSentenceBounds(raw, idx);
@@ -299,7 +331,6 @@ function distanceToRect(x: number, y: number, rect: DOMRect): number {
 
 /**
  * Expand around an index to sentence boundaries.
- * Very simple rule-based sentence detection.
  */
 function getSentenceBounds(text: string, conceptIndex: number): {
   start: number;
@@ -352,10 +383,12 @@ function wrapSentence(
 
   const span = document.createElement("span");
   span.textContent = sentence;
-  span.style.background = "rgba(56, 189, 248, 0.12)";
-  span.style.borderRadius = "6px";
-  span.style.padding = "1px 3px";
-  span.style.transition = "opacity 180ms ease, transform 180ms ease, background 180ms ease";
+  span.style.background = "rgba(14, 165, 233, 0.10)";
+  span.style.borderRadius = "10px";
+  span.style.padding = "2px 5px";
+  span.style.boxShadow = "inset 0 0 0 1px rgba(14, 165, 233, 0.12)";
+  span.style.transition =
+    "opacity 180ms ease, transform 180ms ease, background 180ms ease, box-shadow 180ms ease";
   frag.appendChild(span);
 
   if (after) frag.appendChild(document.createTextNode(after));
@@ -374,14 +407,16 @@ function morphSentence(target: HTMLSpanElement | null, explanation: string) {
   if (!target) return;
 
   target.style.opacity = "0";
-  target.style.transform = "translateY(-2px)";
+  target.style.transform = "translateY(-2px) scale(0.995)";
 
   window.setTimeout(() => {
     target.textContent = stripMarkdown(explanation);
-    target.style.background = "rgba(34, 197, 94, 0.14)";
-    target.style.padding = "2px 4px";
+    target.style.background = "rgba(34, 197, 94, 0.12)";
+    target.style.boxShadow = "inset 0 0 0 1px rgba(34, 197, 94, 0.16)";
+    target.style.padding = "4px 6px";
+    target.style.borderRadius = "10px";
     target.style.opacity = "1";
-    target.style.transform = "translateY(0)";
+    target.style.transform = "translateY(0) scale(1)";
   }, 180);
 }
 
