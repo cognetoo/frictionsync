@@ -7,7 +7,7 @@ const manifest: ManifestV3Export = {
   description:
     "Local-first friction detection + personalized analogies + mastery tracking.",
   permissions: ["storage", "tabs"],
-  host_permissions: ["<all_urls>"],
+  host_permissions: ["<all_urls>","http://localhost:8003/*"],
   background: {
     service_worker: "src/background/background.ts",
     type: "module"
