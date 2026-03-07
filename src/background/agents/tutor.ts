@@ -1,8 +1,8 @@
 import type { UserProfile } from "../store/profileStore";
 
 export type TutorRequest = {
-  concept: string;     // chosen by Agent A
-  pageTitle?: string;  
+  concept: string;
+  pageTitle?: string;
 };
 
 export type TutorResponse = {
@@ -10,34 +10,35 @@ export type TutorResponse = {
   body: string;
   cta: string;
   concept: string;
-  styleTag: string; // for debugging: "clash_royale" / "yoga" / "generic"
+  styleTag: string;
+  masteryBand: "beginner" | "intermediate" | "advanced";
 };
 
 /**
- * Agent B: Tutor
- * Generates a personalized analogy/explanation using user interests.
+ * Agent B: Adaptive Tutor
+ * Generates explanation depth based on mastery and user interests.
  */
 export function tutor(req: TutorRequest, profile: UserProfile): TutorResponse {
   const concept = normalizeConcept(req.concept);
-
-  // Choose a teaching "style" based on interests.
-  const style = pickStyle(profile.interests);
-
-  // If already mastered, reduce interruptions (more in Agent A/C later).
   const mastery = profile.mastery[concept] ?? 0;
+  const masteryBand = getMasteryBand(mastery);
 
-  const title = mastery >= 5
-    ? `Quick check: ${concept}`
-    : `Quick help: ${concept}`;
+  const style = pickStyle(profile.interests, masteryBand);
 
-  const body = buildAnalogy(concept, style, mastery);
+  const title =
+    masteryBand === "advanced"
+      ? `Quick check: ${concept}`
+      : `Quick help: ${concept}`;
+
+  const body = buildAdaptiveExplanation(concept, style, mastery, masteryBand);
 
   return {
     title,
     body,
     cta: "Got it!",
     concept,
-    styleTag: style
+    styleTag: style,
+    masteryBand
   };
 }
 
@@ -45,40 +46,106 @@ export function tutor(req: TutorRequest, profile: UserProfile): TutorResponse {
  * Normalize concept text to a stable key.
  */
 export function normalizeConcept(c: string): string {
-  return c.trim().toLowerCase().slice(0, 60);
+  return c.trim().toLowerCase().slice(0, 80);
 }
 
-export function pickStyle(interests: string[]): "clash_royale" | "yoga" | "generic" {
-  
-  for (const i of interests){
-    const s = i.toLowerCase()
-    if (s.includes("clash")) return "clash_royale"
-    if (s.includes("yoga")) return "yoga"
+/**
+ * Convert mastery score into learning stage.
+ */
+export function getMasteryBand(
+  mastery: number
+): "beginner" | "intermediate" | "advanced" {
+  if (mastery <= 2) return "beginner";
+  if (mastery <= 5) return "intermediate";
+  return "advanced";
+}
+
+/**
+ * Pick a personalization style.
+ * Beginner: interests strongly influence explanation style.
+ * Intermediate: still personalize, but less heavily.
+ * Advanced: usually prefer generic technical explanation.
+ */
+export function pickStyle(
+  interests: string[],
+  masteryBand: "beginner" | "intermediate" | "advanced"
+): "clash_royale" | "yoga" | "generic" {
+  if (masteryBand === "advanced") {
+    return "generic";
   }
+
+  for (const interest of interests) {
+    const s = interest.toLowerCase();
+
+    if (s.includes("clash")) return "clash_royale";
+    if (s.includes("yoga")) return "yoga";
+  }
+
   return "generic";
 }
 
 /**
- * Core response generator.
- * In v1: deterministic templates.
- * In v2: swap this function to call Gemini Nano / Serverless LLM.
+ * Adaptive explanation builder.
  */
-export function buildAnalogy(
+export function buildAdaptiveExplanation(
   concept: string,
   style: "clash_royale" | "yoga" | "generic",
-  mastery: number
+  mastery: number,
+  masteryBand: "beginner" | "intermediate" | "advanced"
 ): string {
-  const prefix = mastery >= 5
-    ? "You probably already know this, but here’s a quick refresher."
-    : "Here’s a simple way to think about it.";
+  if (masteryBand === "beginner") {
+    return buildBeginnerExplanation(concept, style);
+  }
 
+  if (masteryBand === "intermediate") {
+    return buildIntermediateExplanation(concept, style);
+  }
+
+  return buildAdvancedExplanation(concept);
+}
+
+/**
+ * Beginner explanations:
+ * highly intuitive, analogy-first.
+ */
+function buildBeginnerExplanation(
+  concept: string,
+  style: "clash_royale" | "yoga" | "generic"
+): string {
   if (style === "clash_royale") {
-    return `${prefix} **${concept}** is like a Clash Royale match: when something "redirects" traffic, it’s like your Hog Rider getting pulled to a building instead of the tower. The key is: who controls the direction and why.`;
+    return `Here's a simple way to think about it. **${concept}** is like a Clash Royale match: you want to understand who is directing the flow, what information is being shared, and how decisions are made from that. Focus first on the role it plays before worrying about the deeper mechanics.`;
   }
 
   if (style === "yoga") {
-    return `${prefix} **${concept}** is like learning a Yoga pose: if you keep falling out of balance, you step back to a simpler alignment cue. Focus on the core idea first, then add the details.`;
+    return `Here's a simple way to think about it. **${concept}** is like learning a Yoga pose: first understand the base alignment, then the balance, then the small adjustments. Don’t try to memorize every detail at once—start with the core purpose of the concept.`;
   }
 
-  return `${prefix} **${concept}** means there’s a core mechanism happening. Break it into: (1) what the goal is, (2) what changes, and (3) what the impact is.`;
+  return `Here's a simple way to think about it. **${concept}** has a basic role, a mechanism, and an effect. First ask: what is it used for, how does it work at a high level, and what changes because of it?`;
+}
+
+/**
+ * Intermediate explanations:
+ * mix analogy + technical meaning.
+ */
+function buildIntermediateExplanation(
+  concept: string,
+  style: "clash_royale" | "yoga" | "generic"
+): string {
+  if (style === "clash_royale") {
+    return `You're probably past the very basic intuition, so here's the next layer. **${concept}** can be understood like a Clash Royale system where units react based on structured information and predefined rules. The important technical step is to connect the analogy back to the real mechanism: what data is exchanged, what decision rule is used, and what outcome that produces.`;
+  }
+
+  if (style === "yoga") {
+    return `You already have some intuition, so now think of **${concept}** like progressing from the shape of a Yoga pose to the actual mechanics of balance and alignment. At this stage, focus on the internal mechanism: what inputs it uses, what process it follows, and how that affects the final result.`;
+  }
+
+  return `At this stage, think about **${concept}** less as a definition and more as a mechanism. Identify the inputs it depends on, the process it follows, and the output or decision it produces. That gives you a more technical understanding than just memorizing the term.`;
+}
+
+/**
+ * Advanced explanations:
+ * mostly technical, concise, less analogy-heavy.
+ */
+function buildAdvancedExplanation(concept: string): string {
+  return `You probably already know this, but here's a quick refresher. **${concept}** should be understood in terms of its role, internal mechanism, and downstream effect. Focus on what state or data it depends on, what algorithm or rule it applies, and how that influences system behavior.`;
 }
