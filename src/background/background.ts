@@ -83,7 +83,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
       // Run Agent B (Tutor) to generate a response
-      const response = tutor({ concept: decision.concept }, profile);
+      const response = await tutor({ concept: decision.concept }, profile);
       console.log("[FS] tutor response", response);
 
       // Remember last concept for this tab (so feedback updates correct mastery)

@@ -1,3 +1,4 @@
+// src/background/agents/tutor.ts
 import type { UserProfile } from "../store/profileStore";
 
 export type TutorRequest = {
@@ -12,45 +13,77 @@ export type TutorResponse = {
   concept: string;
   styleTag: string;
   masteryBand: "beginner" | "intermediate" | "advanced";
+  source: "ai" | "fallback";
 };
 
 /**
- * Agent B: Adaptive Tutor
- * Generates explanation depth based on mastery and user interests.
+ * Tutor v3
+ * AI-ready hybrid tutor:
+ * - tries AI generation
+ * - falls back to deterministic Tutor v2 if AI is unavailable
  */
-export function tutor(req: TutorRequest, profile: UserProfile): TutorResponse {
+export async function tutor(
+  req: TutorRequest,
+  profile: UserProfile
+): Promise<TutorResponse> {
   const concept = normalizeConcept(req.concept);
   const mastery = profile.mastery[concept] ?? 0;
   const masteryBand = getMasteryBand(mastery);
-
-  const style = pickStyle(profile.interests, masteryBand);
 
   const title =
     masteryBand === "advanced"
       ? `Quick check: ${concept}`
       : `Quick help: ${concept}`;
 
-  const body = buildAdaptiveExplanation(concept, style, mastery, masteryBand);
+  // AI path
+  const aiBody = await tryGenerateWithAI({
+    concept,
+    interests: profile.interests,
+    mastery,
+    masteryBand,
+    pageTitle: req.pageTitle
+  });
+
+  if (aiBody) {
+    return {
+      title,
+      body: aiBody,
+      cta: "Got it!",
+      concept,
+      styleTag: "ai_dynamic",
+      masteryBand,
+      source: "ai"
+    };
+  }
+
+  // Fallback path
+  const fallbackStyle = pickFallbackStyle(profile.interests, masteryBand);
+  const fallbackBody = buildFallbackExplanation(
+    concept,
+    fallbackStyle,
+    masteryBand
+  );
 
   return {
     title,
-    body,
+    body: fallbackBody,
     cta: "Got it!",
     concept,
-    styleTag: style,
-    masteryBand
+    styleTag: fallbackStyle,
+    masteryBand,
+    source: "fallback"
   };
 }
 
 /**
- * Normalize concept text to a stable key.
+ * Normalize concept text.
  */
 export function normalizeConcept(c: string): string {
   return c.trim().toLowerCase().slice(0, 80);
 }
 
 /**
- * Convert mastery score into learning stage.
+ * Convert mastery score into a learning stage.
  */
 export function getMasteryBand(
   mastery: number
@@ -61,18 +94,72 @@ export function getMasteryBand(
 }
 
 /**
- * Pick a personalization style.
- * Beginner: interests strongly influence explanation style.
- * Intermediate: still personalize, but less heavily.
- * Advanced: usually prefer generic technical explanation.
+ * Prompt input for future AI generation.
  */
-export function pickStyle(
+type TutorAIInput = {
+  concept: string;
+  interests: string[];
+  mastery: number;
+  masteryBand: "beginner" | "intermediate" | "advanced";
+  pageTitle?: string;
+};
+
+/**
+ * AI stub:
+ * For now returns null so fallback is used.
+ * Later this will call a serverless/backend endpoint or local model.
+ */
+async function tryGenerateWithAI(input: TutorAIInput): Promise<string | null> {
+  const prompt = buildTutorPrompt(input);
+
+  console.log("[FS] tutor v3 AI prompt", prompt);
+
+  // TODO later:
+  // - send prompt to backend/serverless endpoint
+  // - return model-generated explanation string
+  // - if generation fails, return null
+
+  return null;
+}
+
+/**
+ * Build the future AI prompt.
+ * This is the key part of Tutor v3 design.
+ */
+export function buildTutorPrompt(input: TutorAIInput): string {
+  const interests =
+    input.interests.length > 0 ? input.interests.join(", ") : "none provided";
+
+  return [
+    "You are an adaptive tutor inside a browser extension.",
+    `Concept: ${input.concept}`,
+    `Mastery score: ${input.mastery}`,
+    `Mastery band: ${input.masteryBand}`,
+    `User interests: ${interests}`,
+    `Page title: ${input.pageTitle ?? "unknown"}`,
+    "",
+    "Instructions:",
+    "- Explain the concept at the user's current mastery level.",
+    "- For beginner: use simple intuition and optionally one of the user's interests.",
+    "- For intermediate: combine intuition with mechanism.",
+    "- For advanced: be concise and technical, and reduce analogy use.",
+    "- Do not over-explain.",
+    "- Keep the answer to 2-4 sentences.",
+    "- Make it specific to the concept, not generic filler.",
+    "- Prefer the most natural user interest if one helps.",
+    "- Avoid markdown headings or bullet points.",
+    "- Avoid choosing trivial or generic comparisions if they do not help understanding."
+  ].join("\n");
+}
+
+/**
+ * Deterministic fallback style selection.
+ */
+function pickFallbackStyle(
   interests: string[],
   masteryBand: "beginner" | "intermediate" | "advanced"
 ): "clash_royale" | "yoga" | "generic" {
-  if (masteryBand === "advanced") {
-    return "generic";
-  }
+  if (masteryBand === "advanced") return "generic";
 
   for (const interest of interests) {
     const s = interest.toLowerCase();
@@ -85,67 +172,36 @@ export function pickStyle(
 }
 
 /**
- * Adaptive explanation builder.
+ * Deterministic fallback explanation generator.
  */
-export function buildAdaptiveExplanation(
+function buildFallbackExplanation(
   concept: string,
   style: "clash_royale" | "yoga" | "generic",
-  mastery: number,
   masteryBand: "beginner" | "intermediate" | "advanced"
 ): string {
   if (masteryBand === "beginner") {
-    return buildBeginnerExplanation(concept, style);
+    if (style === "clash_royale") {
+      return `Here’s a simple way to think about it. **${concept}** is like a Clash Royale system where decisions depend on shared information and a clear rule for what to do next. Start by understanding its role before going into the deeper mechanics.`;
+    }
+
+    if (style === "yoga") {
+      return `Here’s a simple way to think about it. **${concept}** is like learning a Yoga pose: first understand the purpose, then the balance, then the adjustments. Start with what it does before trying to memorize all the internal details.`;
+    }
+
+    return `Here’s a simple way to think about it. **${concept}** can be understood through its purpose, its mechanism, and its effect. First ask what it is used for, then how it works at a high level, then what changes because of it.`;
   }
 
   if (masteryBand === "intermediate") {
-    return buildIntermediateExplanation(concept, style);
+    if (style === "clash_royale") {
+      return `You already have some intuition, so take the next step. **${concept}** is like a structured Clash Royale system where the important question is what information is exchanged, what rule is applied, and what decision that produces. Connect the analogy back to the real mechanism.`;
+    }
+
+    if (style === "yoga") {
+      return `You already have the basic feel for it, so now focus on the mechanism behind **${concept}**. Think of it like moving from the shape of a Yoga pose to understanding balance, alignment, and correction.`;
+    }
+
+    return `At this stage, think of **${concept}** as a mechanism, not just a definition. Identify what inputs it depends on, what process or rule it applies, and what output or decision it produces.`;
   }
 
-  return buildAdvancedExplanation(concept);
-}
-
-/**
- * Beginner explanations:
- * highly intuitive, analogy-first.
- */
-function buildBeginnerExplanation(
-  concept: string,
-  style: "clash_royale" | "yoga" | "generic"
-): string {
-  if (style === "clash_royale") {
-    return `Here's a simple way to think about it. **${concept}** is like a Clash Royale match: you want to understand who is directing the flow, what information is being shared, and how decisions are made from that. Focus first on the role it plays before worrying about the deeper mechanics.`;
-  }
-
-  if (style === "yoga") {
-    return `Here's a simple way to think about it. **${concept}** is like learning a Yoga pose: first understand the base alignment, then the balance, then the small adjustments. Don’t try to memorize every detail at once—start with the core purpose of the concept.`;
-  }
-
-  return `Here's a simple way to think about it. **${concept}** has a basic role, a mechanism, and an effect. First ask: what is it used for, how does it work at a high level, and what changes because of it?`;
-}
-
-/**
- * Intermediate explanations:
- * mix analogy + technical meaning.
- */
-function buildIntermediateExplanation(
-  concept: string,
-  style: "clash_royale" | "yoga" | "generic"
-): string {
-  if (style === "clash_royale") {
-    return `You're probably past the very basic intuition, so here's the next layer. **${concept}** can be understood like a Clash Royale system where units react based on structured information and predefined rules. The important technical step is to connect the analogy back to the real mechanism: what data is exchanged, what decision rule is used, and what outcome that produces.`;
-  }
-
-  if (style === "yoga") {
-    return `You already have some intuition, so now think of **${concept}** like progressing from the shape of a Yoga pose to the actual mechanics of balance and alignment. At this stage, focus on the internal mechanism: what inputs it uses, what process it follows, and how that affects the final result.`;
-  }
-
-  return `At this stage, think about **${concept}** less as a definition and more as a mechanism. Identify the inputs it depends on, the process it follows, and the output or decision it produces. That gives you a more technical understanding than just memorizing the term.`;
-}
-
-/**
- * Advanced explanations:
- * mostly technical, concise, less analogy-heavy.
- */
-function buildAdvancedExplanation(concept: string): string {
-  return `You probably already know this, but here's a quick refresher. **${concept}** should be understood in terms of its role, internal mechanism, and downstream effect. Focus on what state or data it depends on, what algorithm or rule it applies, and how that influences system behavior.`;
+  return `You probably already know this, but here’s a quick refresher. **${concept}** should be understood in terms of its role, internal mechanism, and downstream effect. Focus on what state or data it depends on, what rule or algorithm it applies, and how that influences system behavior.`;
 }
