@@ -1,9 +1,46 @@
 export type SensorEvent =
-  | { type: "hover"; term: string; ms: number; t: number }
+  | { type: "hover"; term: string; ms: number; t: number, x: number, y: number}
   | { type: "backscroll"; count: number; t: number }
   | { type: "dwell"; paragraph: number; ms: number; t: number };
 
 type SensorCallback = (ev: SensorEvent) => void;
+
+const STOP_WORDS = new Set([
+  "a", "an", "the", "is", "are", "was", "were",
+  "and", "or", "but", "if", "then", "else",
+  "of", "to", "in", "on", "at", "by", "for", "from", "with", "as",
+  "this", "that", "these", "those",
+  "it", "its", "be", "been", "being",
+  "do", "does", "did",
+  "have", "has", "had",
+  "can", "could", "will", "would", "should", "may", "might",
+  "not", "no", "yes",
+  "into", "over", "under", "about", "after", "before",
+  "than", "so", "such", "also",
+  "link", "like","used","using","many"
+]);
+
+function normalizeHoverTerm(word: string): string {
+  return word.trim().toLowerCase();
+}
+
+function isMeaningfulHoverTerm(word: string): boolean {
+  const term = normalizeHoverTerm(word);
+
+  // too short
+  if (term.length < 3) return false;
+
+  // stop words / generic words
+  if (STOP_WORDS.has(term)) return false;
+
+  // numbers only
+  if (/^\d+$/.test(term)) return false;
+
+  // must contain at least one letter
+  if (!/[a-z]/i.test(term)) return false;
+
+  return true;
+}
 
 /**
  * Starts observing page interaction signals.
@@ -24,6 +61,8 @@ export function startSensor(cb: SensorCallback) {
 function setupHoverSensor(cb: SensorCallback) {
   let hoverStart = 0;
   let hoverWord = "";
+  let hoverX = 0;
+  let hoverY = 0;
 
   function getWordUnderPointer(e: MouseEvent): string {
     const range =
@@ -77,6 +116,8 @@ function setupHoverSensor(cb: SensorCallback) {
     if (w !== hoverWord) {
       hoverWord = w;
       hoverStart = Date.now();
+      hoverX = e.clientX;
+      hoverY = e.clientY;
     }
   });
 
@@ -86,18 +127,27 @@ function setupHoverSensor(cb: SensorCallback) {
 
     const ms = Date.now() - hoverStart;
     if (ms >= 1200) {
-      console.log("[FS] hover word", hoverWord, ms);
+    const cleanTerm = normalizeHoverTerm(hoverWord);
 
-      cb({
+    if (isMeaningfulHoverTerm(cleanTerm)) {
+        console.log("[FS] hover word", cleanTerm, ms);
+        console.log("[FS] hover anchor",cleanTerm,hoverX,hoverY);
+        
+
+        cb({
         type: "hover",
-        term: hoverWord,
+        term: cleanTerm,
         ms,
-        t: Date.now()
-      });
+        t: Date.now(),
+        x: hoverX,
+        y: hoverY
+        });
+    } else {
+        console.log("[FS] ignored weak hover term", cleanTerm, ms);
+    }
 
-      // prevent spamming: reset so it fires once per stable hover
-      hoverStart = 0;
-      hoverWord = "";
+    hoverStart = 0;
+    hoverWord = "";
     }
   }, 300);
 }

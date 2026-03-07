@@ -26,6 +26,7 @@ async function sendIntervention(tabId: number, payload: any) {
  * Message handler: receives signals + feedback from content scripts.
  */
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  console.log("[FS] onMessage fired in background", msg);
   (async () => {
     // ---- Safety: messages must come from a tab
     const tabId = sender.tab?.id;
@@ -38,6 +39,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     // ---- 1) SIGNALS: content script sends learning friction signals
     if (msg?.type === "FS_SIGNAL") {
+      console.log("[FS] FS_SIGNAL branch entered", msg.payload);
       const signal: Signal = msg.payload;
 
       // Load user identity memory (enabled + interests + mastery)

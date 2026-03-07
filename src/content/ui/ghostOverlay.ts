@@ -1,6 +1,13 @@
+type HoverAnchor = {
+  term: string;
+  x: number;
+  y: number;
+};
+
 type GhostOverlayPayload = {
   concept: string;
   explanation: string;
+  anchor: HoverAnchor | null;
 };
 
 type GhostOverlayCallbacks = {
@@ -8,12 +15,12 @@ type GhostOverlayCallbacks = {
 };
 
 let ghostChipHost: HTMLDivElement | null = null;
-let activeReplacementSpan: HTMLSpanElement | null = null;
+let activeSentenceSpan: HTMLSpanElement | null = null;
 let escapeHandler: ((e: KeyboardEvent) => void) | null = null;
 
 /**
- * Show a small "Simplify" chip near the first matching concept occurrence.
- * Clicking it morphs the matched text into the simplified explanation.
+ * Show a small "Simplify" chip near the sentence closest to the last hover anchor.
+ * Clicking it morphs the whole sentence into the simplified explanation.
  */
 export function showGhostOverlay(
   payload: GhostOverlayPayload,
@@ -21,14 +28,14 @@ export function showGhostOverlay(
 ) {
   cleanupGhostOverlay();
 
-  const match = findConceptTextMatch(payload.concept);
+  const match = findBestSentenceMatch(payload.concept, payload.anchor);
   if (!match) return;
 
-  const { textNode, start, end } = match;
-  const wrapped = wrapMatchedText(textNode, start, end);
+  const { textNode, sentenceStart, sentenceEnd } = match;
+  const wrapped = wrapSentence(textNode, sentenceStart, sentenceEnd);
   if (!wrapped) return;
 
-  activeReplacementSpan = wrapped;
+  activeSentenceSpan = wrapped;
 
   const rect = wrapped.getBoundingClientRect();
 
@@ -94,11 +101,8 @@ export function showGhostOverlay(
 
     console.log("[FS] ghost simplify clicked", payload.concept);
 
-    morphText(activeReplacementSpan, payload.explanation);
-
-   //feedback
+    morphSentence(activeSentenceSpan, payload.explanation);
     cb.onSimplified();
-
     cleanupGhostChipOnly();
   });
 
@@ -106,17 +110,17 @@ export function showGhostOverlay(
 }
 
 /**
- * Removes chip + restores listeners.
- * Does NOT undo morphed text.
+ * Remove chip and active sentence highlight.
+ * Does not undo already-morphed sentence content.
  */
 export function cleanupGhostOverlay() {
   cleanupGhostChipOnly();
 
-  if (activeReplacementSpan) {
-    activeReplacementSpan.style.background = "";
-    activeReplacementSpan.style.borderRadius = "";
-    activeReplacementSpan.style.padding = "";
-    activeReplacementSpan = null;
+  if (activeSentenceSpan) {
+    activeSentenceSpan.style.background = "";
+    activeSentenceSpan.style.borderRadius = "";
+    activeSentenceSpan.style.padding = "";
+    activeSentenceSpan = null;
   }
 }
 
@@ -133,18 +137,47 @@ function cleanupGhostChipOnly() {
 }
 
 /**
- * Find first text-node match of concept in the page.
+ * Find the best matching sentence for the concept.
+ * If anchor exists, choose the sentence nearest to that hover location.
+ * Otherwise, fall back to the first matching visible sentence.
  */
-function findConceptTextMatch(concept: string): {
+function findBestSentenceMatch(
+  concept: string,
+  anchor: HoverAnchor | null
+): {
   textNode: Text;
-  start: number;
-  end: number;
+  sentenceStart: number;
+  sentenceEnd: number;
 } | null {
   const needle = concept.trim().toLowerCase();
   if (!needle) return null;
 
+  // 1) Try exact sentence near the hover point first
+  if (anchor) {
+    const direct = findSentenceFromAnchor(anchor, needle);
+    if (direct) {
+      const raw = direct.textNode.textContent || "";
+      console.log(
+        "[FS] anchor-based sentence match found for concept",
+        concept,
+        raw.slice(direct.sentenceStart, direct.sentenceEnd)
+      );
+      return direct;
+    }
+  }
+
+  // 2) Fallback: nearest matching visible sentence
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   let node: Node | null;
+
+  let bestMatch:
+    | {
+        textNode: Text;
+        sentenceStart: number;
+        sentenceEnd: number;
+        distance: number;
+      }
+    | null = null;
 
   while ((node = walker.nextNode())) {
     const raw = node.textContent || "";
@@ -159,34 +192,169 @@ function findConceptTextMatch(concept: string): {
     const rect = parent.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) continue;
 
-    return {
-      textNode: node as Text,
-      start: idx,
-      end: idx + needle.length
-    };
+    const bounds = getSentenceBounds(raw, idx);
+    if (!bounds) continue;
+
+    const distance = anchor ? distanceToRect(anchor.x, anchor.y, rect) : 0;
+
+    if (!bestMatch || distance < bestMatch.distance) {
+      bestMatch = {
+        textNode: node as Text,
+        sentenceStart: bounds.start,
+        sentenceEnd: bounds.end,
+        distance
+      };
+    }
   }
 
-  return null;
+  if (!bestMatch) return null;
+
+  const raw = bestMatch.textNode.textContent || "";
+  console.log(
+    "[FS] fallback sentence match found for concept",
+    concept,
+    raw.slice(bestMatch.sentenceStart, bestMatch.sentenceEnd)
+  );
+
+  return {
+    textNode: bestMatch.textNode,
+    sentenceStart: bestMatch.sentenceStart,
+    sentenceEnd: bestMatch.sentenceEnd
+  };
+}
+
+
+function findSentenceFromAnchor(
+  anchor: HoverAnchor,
+  concept: string
+): {
+  textNode: Text;
+  sentenceStart: number;
+  sentenceEnd: number;
+} | null {
+
+    console.log("[FS] trying anchor-based match",anchor, concept)
+  const range =
+    (document as any).caretRangeFromPoint?.(anchor.x, anchor.y) ??
+    (document as any).caretPositionFromPoint?.(anchor.x, anchor.y);
+
+  if (!range) return null;
+
+  let textNode: Text | null = null;
+  let offset = 0;
+
+  // caretRangeFromPoint branch
+  if ((range as Range).startContainer) {
+    const node = (range as Range).startContainer;
+    if (node.nodeType === Node.TEXT_NODE) {
+      textNode = node as Text;
+      offset = (range as Range).startOffset;
+    }
+  }
+
+  // caretPositionFromPoint branch
+  if (!textNode && (range as any).offsetNode) {
+    const node = (range as any).offsetNode as Node;
+    if (node.nodeType === Node.TEXT_NODE) {
+      textNode = node as Text;
+      offset = (range as any).offset ?? 0;
+    }
+  }
+
+  if (!textNode) return null;
+
+  const raw = textNode.textContent || "";
+  const lower = raw.toLowerCase();
+
+  // Prefer sentence around the actual hover offset if it contains the concept
+  let idx = lower.indexOf(concept, Math.max(0, offset - 20));
+
+  // fallback: any concept occurrence in this text node
+  if (idx === -1) {
+    idx = lower.indexOf(concept);
+  }
+
+  if (idx === -1) return null;
+
+  const bounds = getSentenceBounds(raw, idx);
+  if (!bounds) return null;
+
+  return {
+    textNode,
+    sentenceStart: bounds.start,
+    sentenceEnd: bounds.end
+  };
 }
 
 /**
- * Wrap the matched substring in a span so we can morph it.
+ * Distance from a point to an element rect center.
  */
-function wrapMatchedText(textNode: Text, start: number, end: number): HTMLSpanElement | null {
+function distanceToRect(x: number, y: number, rect: DOMRect): number {
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const dx = x - cx;
+  const dy = y - cy;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * Expand around an index to sentence boundaries.
+ * Very simple rule-based sentence detection.
+ */
+function getSentenceBounds(text: string, conceptIndex: number): {
+  start: number;
+  end: number;
+} | null {
+  if (!text.trim()) return null;
+
+  let start = conceptIndex;
+  let end = conceptIndex;
+
+  while (start > 0) {
+    const ch = text[start - 1];
+    if (ch === "." || ch === "!" || ch === "?" || ch === "\n") break;
+    start--;
+  }
+
+  while (end < text.length) {
+    const ch = text[end];
+    if (ch === "." || ch === "!" || ch === "?" || ch === "\n") {
+      end++;
+      break;
+    }
+    end++;
+  }
+
+  while (start < text.length && /\s/.test(text[start])) start++;
+  while (end > 0 && /\s/.test(text[end - 1])) end--;
+
+  if (end <= start) return null;
+
+  return { start, end };
+}
+
+/**
+ * Wrap a full sentence in a span so we can morph it.
+ */
+function wrapSentence(
+  textNode: Text,
+  sentenceStart: number,
+  sentenceEnd: number
+): HTMLSpanElement | null {
   const text = textNode.textContent || "";
-  const before = text.slice(0, start);
-  const match = text.slice(start, end);
-  const after = text.slice(end);
+  const before = text.slice(0, sentenceStart);
+  const sentence = text.slice(sentenceStart, sentenceEnd);
+  const after = text.slice(sentenceEnd);
 
   const frag = document.createDocumentFragment();
 
   if (before) frag.appendChild(document.createTextNode(before));
 
   const span = document.createElement("span");
-  span.textContent = match;
-  span.style.background = "rgba(56, 189, 248, 0.18)";
-  span.style.borderRadius = "4px";
-  span.style.padding = "0 2px";
+  span.textContent = sentence;
+  span.style.background = "rgba(56, 189, 248, 0.12)";
+  span.style.borderRadius = "6px";
+  span.style.padding = "1px 3px";
   span.style.transition = "opacity 180ms ease, transform 180ms ease, background 180ms ease";
   frag.appendChild(span);
 
@@ -200,9 +368,9 @@ function wrapMatchedText(textNode: Text, start: number, end: number): HTMLSpanEl
 }
 
 /**
- * Morph the matched text into simplified explanation.
+ * Morph the entire sentence into the simplified explanation.
  */
-function morphText(target: HTMLSpanElement | null, explanation: string) {
+function morphSentence(target: HTMLSpanElement | null, explanation: string) {
   if (!target) return;
 
   target.style.opacity = "0";

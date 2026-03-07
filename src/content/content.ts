@@ -8,6 +8,13 @@ if ((window as any).__FS_LOADED__) {
   console.log("[FS] already loaded, skipping");
 } else {
   (window as any).__FS_LOADED__ = true;
+  type HoverAnchor = {
+    term: string;
+    x: number;
+    y: number;
+  };
+
+  let lastHoverAnchor: HoverAnchor | null = null;
 
   /**
    * Safe message sender.
@@ -25,6 +32,15 @@ if ((window as any).__FS_LOADED__) {
    * Send a sensor event to background.
    */
   function sendSignal(ev: SensorEvent) {
+    if(ev.type === "hover"){
+        lastHoverAnchor = {
+            term: ev.term,
+            x: ev.x,
+            y: ev.y
+        };
+
+        console.log("[FS] stored hover anchor",lastHoverAnchor);
+    }
     safeSendMessage({ type: "FS_SIGNAL", payload: ev });
     console.log("[FS] signal", ev);
   }
@@ -89,7 +105,8 @@ if ((window as any).__FS_LOADED__) {
       showGhostOverlay(
         {
           concept: payload.concept,
-          explanation: payload.body
+          explanation: payload.body,
+          anchor: lastHoverAnchor
         },
         {
           onSimplified: () => {

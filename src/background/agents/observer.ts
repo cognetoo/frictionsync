@@ -71,14 +71,139 @@ export function observe(
 }
 
 export function pickConcept(hoverTerms: string[]): string | null {
+  if (hoverTerms.length === 0) return null;
 
-  for (let i = hoverTerms.length - 1; i >= 0; i--){
-    const term = hoverTerms[i].trim().toLowerCase()
-     if (term.length > 0) {
-      return term;
+  type CandidateData = {
+    count: number;
+    lastIndex: number;
+  };
+
+  const stats = new Map<string, CandidateData>();
+
+  for (let i = 0; i < hoverTerms.length; i++) {
+    const raw = hoverTerms[i];
+    const term = normalizeConceptCandidate(raw);
+    if (!term) continue;
+
+    const cur = stats.get(term);
+    if (cur) {
+      cur.count += 1;
+      cur.lastIndex = i;
+    } else {
+      stats.set(term, { count: 1, lastIndex: i });
     }
-
   }
-  
-  return null;
+
+  if (stats.size === 0) return null;
+
+  let bestTerm: string | null = null;
+  let bestScore = -Infinity;
+
+  const total = hoverTerms.length;
+
+  for (const [term, data] of stats.entries()) {
+    const score = scoreConceptCandidate(term, data.count, data.lastIndex, total);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestTerm = term;
+    }
+  }
+
+  return bestTerm;
+}
+
+function normalizeConceptCandidate(term: string): string | null {
+  const clean = term.trim().toLowerCase();
+
+  if (!clean) return null;
+
+  // reject pure numbers
+  if (/^\d+$/.test(clean)) return null;
+
+  // reject decade/year-like forms: 1980s, 2024, 1999
+  if (/^\d{3,4}s?$/.test(clean)) return null;
+
+  return clean;
+}
+
+function scoreConceptCandidate(
+  term: string,
+  count: number,
+  lastIndex: number,
+  totalTerms: number
+): number {
+  let score = 0;
+
+  // reject empty
+  if (!term) return -999;
+
+  // reject pure numbers
+  if (/^\d+$/.test(term)) return -999;
+
+  // reject decade/year-like forms: 1980s, 2024, 1999
+  if (/^\d{3,4}s?$/.test(term)) return -999;
+
+  // weak/common terms
+  const weakTerms = new Set([
+    "same",
+    "state",
+    "many",
+    "used",
+    "using",
+    "system",
+    "information",
+    "simple",
+    "open",
+    "link",
+    "like",
+    "from",
+    "into",
+    "concept",
+    "concepts",
+    "section",
+    "page",
+    "chapter",
+    "type",
+    "such",
+    "very",
+    "more"
+  ]);
+
+  if (weakTerms.has(term)) score -= 4;
+
+  // repeated terms matter
+  score += count * 2;
+
+  // recency bonus: newer terms should matter more
+  // term at the end of the hover list gets the biggest boost
+  const recency = lastIndex / Math.max(1, totalTerms - 1);
+  score += recency * 4;
+
+  // length heuristic
+  if (term.length >= 3 && term.length <= 8) score += 2;
+  if (term.length > 8 && term.length <= 16) score += 1;
+
+  // acronym / protocol-like terms
+  const acronymish = new Set([
+    "ospf", "tcp", "udp", "bgp", "rfc", "ip", "ipv4", "ipv6", "icmp", "dns"
+  ]);
+  if (acronymish.has(term)) score += 4;
+
+  // technical-looking suffixes
+  if (
+    term.endsWith("tion") ||
+    term.endsWith("sion") ||
+    term.endsWith("ity") ||
+    term.endsWith("ology") ||
+    term.endsWith("orithm") ||
+    term.endsWith("tocol")
+  ) {
+    score += 2;
+  }
+
+  // must contain letters
+  if (!/[a-z]/i.test(term)) score -= 5;
+
+  return score;
 }
