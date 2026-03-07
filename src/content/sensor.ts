@@ -215,6 +215,20 @@ function setupDwellSensor(cb: SensorCallback) {
 function setupClickSensor(cb: SensorCallback) {
   const recentClicks: Array<{ x: number; y: number; t: number }> = [];
 
+  let lastUrl = location.href;
+  let suppressDeadClickUntil = 0;
+
+  // If URL changes shortly after click, that click was probably meaningful.
+  window.addEventListener("popstate", () => {
+    suppressDeadClickUntil = Date.now() + 800;
+    lastUrl = location.href;
+  });
+
+  window.addEventListener("hashchange", () => {
+    suppressDeadClickUntil = Date.now() + 800;
+    lastUrl = location.href;
+  });
+
   document.addEventListener("click", (e) => {
     const target = e.target as HTMLElement | null;
     if (!target) return;
@@ -229,7 +243,6 @@ function setupClickSensor(cb: SensorCallback) {
     // -------------------------
     recentClicks.push({ x, y, t: now });
 
-    // keep only clicks from last 1200 ms
     while (recentClicks.length > 0 && now - recentClicks[0].t > 1200) {
       recentClicks.shift();
     }
@@ -256,19 +269,51 @@ function setupClickSensor(cb: SensorCallback) {
         t: now
       });
 
-      // clear recent clicks so we don't spam rageclick events repeatedly
       recentClicks.length = 0;
       return;
     }
 
     // -------------------------
-    // Dead click detection
+    // Smarter dead click detection
     // -------------------------
-    const interactive = !!target.closest(
-      "a, button, input, textarea, select, summary, label, [role='button']"
-    );
 
-    if (!interactive) {
+    // 1) Ignore clearly interactive targets
+    const interactive = !!target.closest(
+      "a, button, input, textarea, select, summary, label, [role='button'], [role='link'],details"
+    );
+    if (interactive) return;
+
+    // 2) Ignore editable/contenteditable areas
+    const editable = !!target.closest(
+      "input, textarea, [contenteditable='true'], [contenteditable='']"
+    );
+    if (editable) return;
+
+    // 3) Ignore if user is selecting text
+    const selection = window.getSelection()?.toString().trim() ?? "";
+    if (selection.length > 0) return;
+
+    // 4) Ignore clicks very soon after navigation/hash changes
+    if (now < suppressDeadClickUntil) return;
+
+    // 5) Delay dead-click emission briefly.
+    // If URL changed or focus moved meaningfully, we skip.
+    window.setTimeout(() => {
+      const activeTag = document.activeElement?.tagName?.toLowerCase() ?? "";
+
+      const focusMovedMeaningfully =
+        activeTag === "input" ||
+        activeTag === "textarea" ||
+        activeTag === "select" ||
+        document.activeElement?.getAttribute("contenteditable") === "true";
+
+      const urlChanged = location.href !== lastUrl;
+
+      if (focusMovedMeaningfully || urlChanged) {
+        lastUrl = location.href;
+        return;
+      }
+
       console.log("[FS] dead click detected", {
         x,
         y,
@@ -282,6 +327,6 @@ function setupClickSensor(cb: SensorCallback) {
         tag,
         t: now
       });
-    }
+    }, 250);
   });
 }

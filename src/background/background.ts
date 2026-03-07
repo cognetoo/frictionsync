@@ -15,7 +15,39 @@ const lastExplainedConceptByTab = new Map<number, string>();
 
 const lastConceptExplainTimeByTab = new Map<number, number>();
 
+const  lastResolvedConceptByTab = new Map<number, string>();
+
+const lastResolvedConceptTimeByTab = new Map<number, number>();
+
 const SAME_CONCEPT_SUPPRESSION_MS = 30000;
+
+const RESOLVED_CONCEPT_SUPPRESSION_MS = 60000;
+
+  function buildTutorContextTerms(
+    hoverTerms: string[],
+    concept: string,
+    limit = 4
+  ): string[] {
+    const normalizedConcept = concept.trim().toLowerCase();
+    const seen = new Set<string>();
+    const out: string[] = [];
+
+    // walk from most recent to older
+    for (let i = hoverTerms.length - 1; i >= 0; i--) {
+      const term = hoverTerms[i].trim().toLowerCase();
+
+      if (!term) continue;
+      if (term === normalizedConcept) continue;
+      if (seen.has(term)) continue;
+
+      seen.add(term);
+      out.push(term);
+
+      if (out.length >= limit) break;
+    }
+
+    return out;
+  }
 
 /**
  * Helper: send intervention to a specific tab's content script.
@@ -105,7 +137,26 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return;
     }
 
+    const lastResolvedConcept = lastResolvedConceptByTab.get(tabId) ?? null;
+const lastResolvedTime = lastResolvedConceptTimeByTab.get(tabId) ?? 0;
+
+  if (
+    lastResolvedConcept === decision.concept &&
+    now - lastResolvedTime < RESOLVED_CONCEPT_SUPPRESSION_MS
+  ) {
+    console.log("[FS] skipping recently resolved concept", {
+      tabId,
+      concept: decision.concept,
+      waitMsRemaining: RESOLVED_CONCEPT_SUPPRESSION_MS - (now - lastResolvedTime)
+    });
+
+    sendResponse({ ok: true, skipped: "recently_resolved_suppressed" });
+    return;
+  }
+
       // Run Agent B (Tutor) to generate a response
+      const pageTitle = sender.tab?.title ?? undefined;
+      const contextTerms = buildTutorContextTerms(ctx.hoverTerms, decision.concept);
       const response = await tutor({ concept: decision.concept }, profile);
       console.log("[FS] tutor response", response);
 
@@ -135,11 +186,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       // Run Agent C (Auditor) to update mastery
       const audit = await auditFeedback(feedback, concept);
       
-      if (feedback.type === "got_it" && concept){
-        lastExplainedConceptByTab.set(tabId,concept);
-        lastConceptExplainTimeByTab.set(tabId,Date.now());
-      }
+    if (feedback.type === "got_it" && concept) {
+      const now = Date.now();
 
+      lastExplainedConceptByTab.set(tabId, concept);
+      lastConceptExplainTimeByTab.set(tabId, now);
+
+      lastResolvedConceptByTab.set(tabId, concept);
+      lastResolvedConceptTimeByTab.set(tabId, now);
+    }
       console.log("[FS] audit result", audit);
 
       sendResponse({ ok: true, audit });
@@ -153,6 +208,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       lastInterventionTime.delete(tabId);
       lastExplainedConceptByTab.delete(tabId);
       lastConceptExplainTimeByTab.delete(tabId);
+      lastResolvedConceptByTab.delete(tabId);
+      lastResolvedConceptTimeByTab.delete(tabId);
       sendResponse({ ok: true });
       return;
     }
@@ -173,4 +230,6 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   lastInterventionTime.delete(tabId);
   lastExplainedConceptByTab.delete(tabId);
   lastConceptExplainTimeByTab.delete(tabId);
+  lastResolvedConceptByTab.delete(tabId);
+  lastResolvedConceptTimeByTab.delete(tabId);
 });

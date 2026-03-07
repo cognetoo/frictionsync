@@ -1,4 +1,3 @@
-// src/background/agents/tutor.ts
 import type { UserProfile } from "../store/profileStore";
 
 import { fetchTutorExplanation } from "./tutorClient";
@@ -6,6 +5,7 @@ import { fetchTutorExplanation } from "./tutorClient";
 export type TutorRequest = {
   concept: string;
   pageTitle?: string;
+  contextTerms?: string[];
 };
 
 export type TutorResponse = {

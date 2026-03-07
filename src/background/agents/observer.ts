@@ -135,6 +135,9 @@ function normalizeConceptCandidate(term: string): string | null {
   // reject decade/year-like forms: 1980s, 2024, 1999
   if (/^\d{3,4}s?$/.test(clean)) return null;
 
+  // reject mostly punctuation/symbols
+  if (!/[a-z]/i.test(clean)) return null;
+
   return clean;
 }
 
@@ -146,60 +149,68 @@ function scoreConceptCandidate(
 ): number {
   let score = 0;
 
-  // reject empty
   if (!term) return -999;
 
-  // reject pure numbers
+  // hard rejects
   if (/^\d+$/.test(term)) return -999;
-
-  // reject decade/year-like forms: 1980s, 2024, 1999
   if (/^\d{3,4}s?$/.test(term)) return -999;
+  if (!/[a-z]/i.test(term)) return -999;
 
-  // weak/common terms
-  const weakTerms = new Set([
-    "same",
-    "state",
-    "many",
-    "used",
-    "using",
-    "system",
-    "information",
-    "simple",
-    "open",
-    "link",
-    "like",
-    "from",
-    "into",
-    "concept",
-    "concepts",
-    "section",
-    "page",
-    "chapter",
-    "type",
-    "such",
-    "very",
-    "more"
-  ]);
+  // -------------------------
+  // Soft penalties for generic words
+  // -------------------------
+  const weakPenaltyMap: Record<string, number> = {
+    same: 4,
+    very: 3,
+    more: 3,
+    such: 3,
+    simple: 3,
+    concept: 4,
+    concepts: 4,
+    chapter: 4,
+    section: 4,
+    page: 4,
+    type: 3,
+    example: 3,
+    examples: 3,
+    information: 2,
+    first: 2,
+    second: 2,
+    many: 2,
+    open: 2,
+    link: 2,
+    gathers : 2,
+    originally: 2,
+  };
 
-  if (weakTerms.has(term)) score -= 4;
+  score -= weakPenaltyMap[term] ?? 0;
 
-  // repeated terms matter
+  // -------------------------
+  // Core positive signals
+  // -------------------------
+
+  // repetition matters
   score += count * 2;
 
-  // recency bonus: newer terms should matter more
-  // term at the end of the hover list gets the biggest boost
+  // recency matters a lot
   const recency = lastIndex / Math.max(1, totalTerms - 1);
   score += recency * 4;
 
-  // length heuristic
+  // length heuristic: moderate length words are often better concepts
   if (term.length >= 3 && term.length <= 8) score += 2;
-  if (term.length > 8 && term.length <= 16) score += 1;
+  else if (term.length <= 14) score += 1;
 
-  // acronym / protocol-like terms
+  // acronym / protocol-like words
   const acronymish = new Set([
-    "ospf", "tcp", "udp", "bgp", "rfc", "ip", "ipv4", "ipv6", "icmp", "dns"
+    "ospf", "tcp", "udp", "bgp", "rfc", "ip", "ipv4", "ipv6", "icmp", "dns",
+    "cidr", "asn", "mpls", "http", "https", "arp"
   ]);
   if (acronymish.has(term)) score += 4;
+
+  // mixed letters + digits can be technical: ipv4, sha256, etc.
+  if (/[a-z]/i.test(term) && /\d/.test(term)) {
+    score += 2;
+  }
 
   // technical-looking suffixes
   if (
@@ -208,13 +219,41 @@ function scoreConceptCandidate(
     term.endsWith("ity") ||
     term.endsWith("ology") ||
     term.endsWith("orithm") ||
-    term.endsWith("tocol")
+    term.endsWith("tocol") ||
+    term.endsWith("graphy") ||
+    term.endsWith("metry")
   ) {
     score += 2;
   }
 
-  // must contain letters
-  if (!/[a-z]/i.test(term)) score -= 5;
+  // networking / systems vocabulary gets a light boost
+  const technicalBoostTerms = new Set([
+    "routing",
+    "router",
+    "routers",
+    "topology",
+    "packet",
+    "packets",
+    "protocol",
+    "protocols",
+    "autonomous",
+    "addressing",
+    "subnet",
+    "prefix",
+    "broadcast",
+    "unicast",
+    "multicast",
+    "interface",
+    "interfaces",
+    "convergence",
+    "metric",
+    "metrics",
+    "forwarding"
+  ]);
+  if (technicalBoostTerms.has(term)) score += 2;
+
+  // tiny penalty for very long generic-looking words
+  if (term.length > 18) score -= 1;
 
   return score;
 }
