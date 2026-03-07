@@ -6,6 +6,7 @@ export type TutorRequest = {
   concept: string;
   pageTitle?: string;
   contextTerms?: string[];
+  sentenceContext?: string;
 };
 
 export type TutorResponse = {
@@ -46,7 +47,8 @@ export async function tutor(
     mastery,
     masteryBand,
     pageTitle: req.pageTitle,
-    contextTerms: req.contextTerms
+    contextTerms: req.contextTerms,
+    sentenceContext: req.sentenceContext
   });
 
   if (aiBody) {
@@ -108,6 +110,7 @@ type TutorAIInput = {
   masteryBand: "beginner" | "intermediate" | "advanced";
   pageTitle?: string;
   contextTerms? : string[];
+  sentenceContext?: string;
 };
 
 /**
@@ -125,7 +128,8 @@ async function tryGenerateWithAI(input: TutorAIInput): Promise<string | null> {
     masteryBand: input.masteryBand,
     interests: input.interests,
     pageTitle: input.pageTitle,
-    contextTerms: input.contextTerms ?? []
+    contextTerms: input.contextTerms ?? [],
+    sentenceContext: input.sentenceContext ?? null
   });
 
   const body = await fetchTutorExplanation(TUTOR_API_BASE_URL,{
@@ -134,7 +138,8 @@ async function tryGenerateWithAI(input: TutorAIInput): Promise<string | null> {
     mastery: input.mastery,
     masteryBand: input.masteryBand,
     pageTitle: input.pageTitle,
-    contextTerms: input.contextTerms ?? []
+    contextTerms: input.contextTerms ?? [],
+    sentenceContext: input.sentenceContext
   });
   if (body){
     console.log("[FS] tutor AI generation succeeded");
@@ -156,6 +161,8 @@ const contextTerms = input.contextTerms && input.contextTerms.length > 0 ?
   const interests =
     input.interests.length > 0 ? input.interests.join(", ") : "none provided";
 
+  const sentenceContext = input.sentenceContext ?? "none";
+
   return [
     "You are an adaptive tutor inside a browser extension.",
     `Concept: ${input.concept}`,
@@ -164,6 +171,7 @@ const contextTerms = input.contextTerms && input.contextTerms.length > 0 ?
     `User interests: ${interests}`,
     `Page title: ${input.pageTitle ?? "unknown"}`,
     `Context terms: ${contextTerms}`,
+    `Sentence context: ${sentenceContext}`,
     "",
     "Instructions:",
     "- Explain the concept at the user's current mastery level.",

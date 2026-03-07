@@ -6,6 +6,7 @@ export type TutorAPIRequest = {
   masteryBand: "beginner" | "intermediate" | "advanced";
   pageTitle?: string;
   contextTerms?: string[];
+  sentenceContext?: string;
 };
 
 export type TutorAPIResponse = {

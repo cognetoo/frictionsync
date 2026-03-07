@@ -1,13 +1,26 @@
 /**
  * Signals coming from the content script.
- * Keep this minimal because messages cross extension boundaries.
  */
 export type Signal =
-  | { type: "hover"; term: string; ms: number; t: number; x: number; y: number }
+  | {
+      type: "hover";
+      term: string;
+      ms: number;
+      t: number;
+      x: number;
+      y: number;
+      sentence?: string;
+    }
   | { type: "backscroll"; count: number; t: number }
   | { type: "dwell"; paragraph: number; ms: number; t: number }
   | { type: "deadclick"; x: number; y: number; tag: string; t: number }
   | { type: "rageclick"; x: number; y: number; count: number; t: number };
+
+export type HoverDetail = {
+  term: string;
+  sentence?: string;
+  t: number;
+};
 
 /**
  * Context summary used by Agent A (Observer).
@@ -15,6 +28,7 @@ export type Signal =
 export type SignalContext = {
   total: number;
   hoverTerms: string[];
+  hoverDetails: HoverDetail[];
   backscrolls: number;
   maxDwellMs: number;
   hoverRepeats: number;
@@ -39,7 +53,6 @@ export function addSignal(tabId: number, signal: Signal) {
 
   arr.push(signal);
 
-  // keep buffer size limited
   if (arr.length > MAX_SIGNALS_PER_TAB) {
     arr.shift();
   }
@@ -63,10 +76,11 @@ export function getContext(tabId: number): SignalContext {
   let backscrolls = 0;
   let maxDwell = 0;
   const hoverTerms: string[] = [];
+  const hoverDetails: HoverDetail[] = [];
 
   let lastHoverTerm: string | null = null;
-  let currentStreak = 0;      // how many times same hover term appeared consecutively
-  let maxHoverRepeats = 0;    // maximum streak seen
+  let currentStreak = 0;
+  let maxHoverRepeats = 0;
 
   let deadClicks = 0;
   let rageClicks = 0;
@@ -82,7 +96,13 @@ export function getContext(tabId: number): SignalContext {
 
     if (s.type === "hover") {
       const normalized = s.term.trim().toLowerCase();
+
       hoverTerms.push(normalized);
+      hoverDetails.push({
+        term: normalized,
+        sentence: s.sentence,
+        t: s.t
+      });
 
       if (normalized === lastHoverTerm) {
         currentStreak++;
@@ -106,9 +126,12 @@ export function getContext(tabId: number): SignalContext {
   const lastSignalTime =
     signals.length > 0 ? signals[signals.length - 1].t : null;
 
+    console.log("[FS] hover details",hoverDetails);
+
   return {
     total: signals.length,
     hoverTerms,
+    hoverDetails,
     backscrolls,
     maxDwellMs: maxDwell,
     hoverRepeats: maxHoverRepeats,

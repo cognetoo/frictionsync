@@ -1,4 +1,4 @@
-import { addSignal, getContext, clearTab, type Signal } from "./store/signalBuffer";
+import { addSignal, getContext, clearTab, type Signal,type HoverDetail } from "./store/signalBuffer";
 import { getProfile } from "./store/profileStore";
 import { observe } from "./agents/observer";
 import { tutor } from "./agents/tutor";
@@ -22,6 +22,28 @@ const lastResolvedConceptTimeByTab = new Map<number, number>();
 const SAME_CONCEPT_SUPPRESSION_MS = 30000;
 
 const RESOLVED_CONCEPT_SUPPRESSION_MS = 60000;
+
+function findSentenceContextForConcept(
+  hoverDetails: HoverDetail[],
+  concept: string
+): string | undefined {
+  const normalizedConcept = concept.trim().toLowerCase();
+
+  for (let i = hoverDetails.length - 1; i >= 0; i--) {
+    const item = hoverDetails[i];
+
+    if (item.term !== normalizedConcept) continue;
+    if (!item.sentence) continue;
+
+    const sentence = item.sentence.trim();
+    if (!sentence) continue;
+    if (sentence.length < 12) continue;
+
+    return sentence;
+  }
+
+  return undefined;
+}
 
   function buildTutorContextTerms(
     hoverTerms: string[],
@@ -157,13 +179,15 @@ const lastResolvedTime = lastResolvedConceptTimeByTab.get(tabId) ?? 0;
       // Run Agent B (Tutor) to generate a response
       const pageTitle = sender.tab?.title ?? undefined;
       const contextTerms = buildTutorContextTerms(ctx.hoverTerms, decision.concept);
+      const sentenceContext = findSentenceContextForConcept(ctx.hoverDetails, decision.concept);
 
       console.log("[FS] tutor context payload",{
         concept: decision.concept,
         pageTitle,
-        contextTerms
+        contextTerms,
+        sentenceContext
       });
-      const response = await tutor({ concept: decision.concept,pageTitle,contextTerms }, profile);
+      const response = await tutor({ concept: decision.concept,pageTitle,contextTerms,sentenceContext}, profile);
       console.log("[FS] tutor response", response);
 
       // Remember last concept for this tab (so feedback updates correct mastery)

@@ -49,6 +49,7 @@ class TutorExplainRequest(BaseModel):
     masteryBand: Literal["beginner", "intermediate", "advanced"]
     pageTitle: Optional[str] = None
     contextTerms: List[str] = []
+    sentenceContext: Optional[str] = None
 
 
 class TutorExplainResponse(BaseModel):
@@ -62,6 +63,7 @@ def build_tutor_prompt(payload: TutorExplainRequest) -> str:
     interests_text = ", ".join(payload.interests) if payload.interests else "none provided"
     page_title = payload.pageTitle or "unknown"
     context_terms = ", ".join(payload.contextTerms) if payload.contextTerms else "none"
+    sentence_context = payload.sentenceContext or "none"
 
     return f"""
 You are FrictionSync, an adaptive tutor inside a browser extension.
@@ -74,11 +76,13 @@ Mastery band: {payload.masteryBand}
 User interests: {interests_text}
 Page title: {page_title}
 Context terms: {context_terms}
+Sentence context: {sentence_context}
 
 Rules:
 - Keep the answer to 2 to 4 sentences.
 - Be specific to the concept.
-- Use page title and context terms if they help make the explanation more specific.
+- Use page title, context terms, and sentence context if they help make the explanation more specific.
+- Prefer grounding in the sentence context when it is relevant.
 - Do not give generic filler.
 - Do not use bullet points.
 - Do not use headings.
