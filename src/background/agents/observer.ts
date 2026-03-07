@@ -13,13 +13,17 @@ export type ObserverConfig = {
   dwellMsHigh: number;       // long dwell threshold
   backscrollHigh: number;    // backscroll threshold
   hoverRepeatsHigh: number;  // repeated hover threshold
+  deadClicksHigh: number;    // dead click threshold
+  rageClicksHigh: number;    // rage click threshold
 };
 
 export const DEFAULT_OBSERVER_CONFIG: ObserverConfig = {
-  threshold: 0.65,
+  threshold: 0.66,
   dwellMsHigh: 30000,
   backscrollHigh: 2,
-  hoverRepeatsHigh: 3
+  hoverRepeatsHigh: 3,
+  deadClicksHigh: 2,
+  rageClicksHigh: 1
 };
 
 /**
@@ -32,21 +36,28 @@ export function observe(
 ): ObserverDecision {
   const reasons: string[] = [];
 
-  // ---- Feature extraction
+// ---- Feature extraction
   const hasLongDwell = ctx.maxDwellMs >= config.dwellMsHigh;
   const hasBackscroll = ctx.backscrolls >= config.backscrollHigh;
   const hasHoverRepeat = ctx.hoverRepeats >= config.hoverRepeatsHigh;
+  const hasDeadClicks = ctx.deadClicks >= config.deadClicksHigh;
+  const hasRageClicks = ctx.rageClicks >= config.rageClicksHigh;
 
   if (hasLongDwell) reasons.push(`Long dwell (${ctx.maxDwellMs}ms)`);
   if (hasBackscroll) reasons.push(`Backscrolls (${ctx.backscrolls})`);
   if (hasHoverRepeat) reasons.push(`Hover repeats (${ctx.hoverRepeats})`);
+  if (hasDeadClicks) reasons.push(`Dead clicks (${ctx.deadClicks})`);
+  if (hasRageClicks) reasons.push(`Rage clicks (${ctx.rageClicks})`);
 
-  // ---- Score calculation 
-  let score = 0.15;
+  // ---- Score calculation
+  // Rebalanced so adding click signals doesn't make intervention too easy.
+  let score = 0.10;
 
-  if (hasLongDwell) score += 0.35;
-  if (hasBackscroll) score += 0.30;
-  if (hasHoverRepeat) score += 0.35;
+  if (hasLongDwell) score += 0.24;
+  if (hasBackscroll) score += 0.20;
+  if (hasHoverRepeat) score += 0.22;
+  if (hasDeadClicks) score += 0.12;
+  if (hasRageClicks) score += 0.22;
 
   // Cap to 1.0
   score = Math.min(1, score);

@@ -1,12 +1,13 @@
 /**
  * Signals coming from the content script.
- * We keep this minimal because messages cross extension boundaries.
+ * Keep this minimal because messages cross extension boundaries.
  */
 export type Signal =
-  | { type: "hover"; term: string; ms: number; t: number }
+  | { type: "hover"; term: string; ms: number; t: number; x: number; y: number }
   | { type: "backscroll"; count: number; t: number }
   | { type: "dwell"; paragraph: number; ms: number; t: number }
-  | { type: "click"; x: number; y: number; t: number };
+  | { type: "deadclick"; x: number; y: number; tag: string; t: number }
+  | { type: "rageclick"; x: number; y: number; count: number; t: number };
 
 /**
  * Context summary used by Agent A (Observer).
@@ -16,20 +17,22 @@ export type SignalContext = {
   hoverTerms: string[];
   backscrolls: number;
   maxDwellMs: number;
+  hoverRepeats: number;
+  deadClicks: number;
+  rageClicks: number;
   lastSignalTime: number | null;
-  hoverRepeats: number
 };
 
 const MAX_SIGNALS_PER_TAB = 40;
 
 /**
  * Internal in-memory buffer.
- * maintaining a map so that signals aren't mixed and each tab has an id mapped to signals
+ * Each tab gets its own signal list so signals don't mix across tabs.
  */
 const buffer = new Map<number, Signal[]>();
 
 /**
- * new signal for a tab.
+ * Add a new signal for a tab.
  */
 export function addSignal(tabId: number, signal: Signal) {
   const arr = buffer.get(tabId) ?? [];
@@ -60,9 +63,13 @@ export function getContext(tabId: number): SignalContext {
   let backscrolls = 0;
   let maxDwell = 0;
   const hoverTerms: string[] = [];
+
   let lastHoverTerm: string | null = null;
-  let currentStreak = 0; //Counts how many times the same term appeared consecutively.
-  let maxHoverRepeats = 0; //Tracks the largest streak found so far
+  let currentStreak = 0;      // how many times same hover term appeared consecutively
+  let maxHoverRepeats = 0;    // maximum streak seen
+
+  let deadClicks = 0;
+  let rageClicks = 0;
 
   for (const s of signals) {
     if (s.type === "backscroll") {
@@ -74,31 +81,45 @@ export function getContext(tabId: number): SignalContext {
     }
 
     if (s.type === "hover") {
-      hoverTerms.push(s.term);
-    
-      if (s.term.trim().toLowerCase() === lastHoverTerm) {
-    currentStreak++;
-  } else {
-    currentStreak = 1;
+      const normalized = s.term.trim().toLowerCase();
+      hoverTerms.push(normalized);
+
+      if (normalized === lastHoverTerm) {
+        currentStreak++;
+      } else {
+        currentStreak = 1;
+      }
+
+      maxHoverRepeats = Math.max(maxHoverRepeats, currentStreak);
+      lastHoverTerm = normalized;
+    }
+
+    if (s.type === "deadclick") {
+      deadClicks += 1;
+    }
+
+    if (s.type === "rageclick") {
+      rageClicks += 1;
+    }
   }
 
-  maxHoverRepeats = Math.max(maxHoverRepeats, currentStreak);
-  lastHoverTerm = s.term;
-}
-  }
+  const lastSignalTime =
+    signals.length > 0 ? signals[signals.length - 1].t : null;
 
   return {
-    total: signals.length, //no. of signals received per tab
+    total: signals.length,
     hoverTerms,
     backscrolls,
     maxDwellMs: maxDwell,
     hoverRepeats: maxHoverRepeats,
-    lastSignalTime: signals.length ? signals[signals.length - 1].t : null
+    deadClicks,
+    rageClicks,
+    lastSignalTime
   };
 }
 
 /**
- * Clear signals when a tab reloads.
+ * Clear signals when a tab reloads or after intervention.
  */
 export function clearTab(tabId: number) {
   buffer.delete(tabId);

@@ -1,7 +1,9 @@
 export type SensorEvent =
-  | { type: "hover"; term: string; ms: number; t: number, x: number, y: number}
+  | { type: "hover"; term: string; ms: number; t: number; x: number; y: number }
   | { type: "backscroll"; count: number; t: number }
-  | { type: "dwell"; paragraph: number; ms: number; t: number };
+  | { type: "dwell"; paragraph: number; ms: number; t: number }
+  | { type: "deadclick"; x: number; y: number; tag: string; t: number }
+  | { type: "rageclick"; x: number; y: number; count: number; t: number };
 
 type SensorCallback = (ev: SensorEvent) => void;
 
@@ -52,6 +54,7 @@ export function startSensor(cb: SensorCallback) {
   setupHoverSensor(cb);
   setupScrollSensor(cb);
   setupDwellSensor(cb);
+  setupClickSensor(cb);
 
 }
 
@@ -207,4 +210,78 @@ function setupDwellSensor(cb: SensorCallback) {
 
   }, 5000);
 
+}
+
+function setupClickSensor(cb: SensorCallback) {
+  const recentClicks: Array<{ x: number; y: number; t: number }> = [];
+
+  document.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    const x = e.clientX;
+    const y = e.clientY;
+    const now = Date.now();
+    const tag = target.tagName.toLowerCase();
+
+    // -------------------------
+    // Rage click detection
+    // -------------------------
+    recentClicks.push({ x, y, t: now });
+
+    // keep only clicks from last 1200 ms
+    while (recentClicks.length > 0 && now - recentClicks[0].t > 1200) {
+      recentClicks.shift();
+    }
+
+    const nearbyClicks = recentClicks.filter((c) => {
+      const dx = c.x - x;
+      const dy = c.y - y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      return dist < 30;
+    });
+
+    if (nearbyClicks.length >= 3) {
+      console.log("[FS] rage click detected", {
+        x,
+        y,
+        count: nearbyClicks.length
+      });
+
+      cb({
+        type: "rageclick",
+        x,
+        y,
+        count: nearbyClicks.length,
+        t: now
+      });
+
+      // clear recent clicks so we don't spam rageclick events repeatedly
+      recentClicks.length = 0;
+      return;
+    }
+
+    // -------------------------
+    // Dead click detection
+    // -------------------------
+    const interactive = !!target.closest(
+      "a, button, input, textarea, select, summary, label, [role='button']"
+    );
+
+    if (!interactive) {
+      console.log("[FS] dead click detected", {
+        x,
+        y,
+        tag
+      });
+
+      cb({
+        type: "deadclick",
+        x,
+        y,
+        tag,
+        t: now
+      });
+    }
+  });
 }

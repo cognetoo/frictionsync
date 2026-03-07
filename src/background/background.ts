@@ -11,6 +11,12 @@ const lastConceptByTab = new Map<number, string>();
 
 const lastInterventionTime = new Map<number, number>();
 
+const lastExplainedConceptByTab = new Map<number, string>();
+
+const lastConceptExplainTimeByTab = new Map<number, number>();
+
+const SAME_CONCEPT_SUPPRESSION_MS = 30000;
+
 /**
  * Helper: send intervention to a specific tab's content script.
  */
@@ -82,12 +88,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return;
     }
 
+    const lastExplainedConcept = lastExplainedConceptByTab.get(tabId) ?? null;
+    const lastConceptTime = lastConceptExplainTimeByTab.get(tabId) ?? 0;
+
+    if (
+      lastExplainedConcept === decision.concept &&
+      now - lastConceptTime < SAME_CONCEPT_SUPPRESSION_MS
+    ) {
+      console.log("[FS] skipping repeated explanation for same concept", {
+        tabId,
+        concept: decision.concept,
+        waitMsRemaining: SAME_CONCEPT_SUPPRESSION_MS - (now - lastConceptTime)
+      });
+
+      sendResponse({ ok: true, skipped: "same_concept_suppressed" });
+      return;
+    }
+
       // Run Agent B (Tutor) to generate a response
       const response = await tutor({ concept: decision.concept }, profile);
       console.log("[FS] tutor response", response);
 
       // Remember last concept for this tab (so feedback updates correct mastery)
       lastConceptByTab.set(tabId, response.concept);
+      lastExplainedConceptByTab.set(tabId,response.concept);
+      lastConceptExplainTimeByTab.set(tabId,now);
 
       // Send intervention bubble to content script UI
       await sendIntervention(tabId, response);
@@ -109,6 +134,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
       // Run Agent C (Auditor) to update mastery
       const audit = await auditFeedback(feedback, concept);
+      
+      if (feedback.type === "got_it" && concept){
+        lastExplainedConceptByTab.set(tabId,concept);
+        lastConceptExplainTimeByTab.set(tabId,Date.now());
+      }
 
       console.log("[FS] audit result", audit);
 
@@ -120,6 +150,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg?.type === "FS_CLEAR_TAB") {
       clearTab(tabId);
       lastConceptByTab.delete(tabId);
+      lastInterventionTime.delete(tabId);
+      lastExplainedConceptByTab.delete(tabId);
+      lastConceptExplainTimeByTab.delete(tabId);
       sendResponse({ ok: true });
       return;
     }
@@ -138,4 +171,6 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   clearTab(tabId);
   lastConceptByTab.delete(tabId);
   lastInterventionTime.delete(tabId);
+  lastExplainedConceptByTab.delete(tabId);
+  lastConceptExplainTimeByTab.delete(tabId);
 });
