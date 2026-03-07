@@ -1,6 +1,8 @@
 // src/background/agents/tutor.ts
 import type { UserProfile } from "../store/profileStore";
 
+import { fetchTutorExplanation } from "./tutorClient";
+
 export type TutorRequest = {
   concept: string;
   pageTitle?: string;
@@ -15,6 +17,8 @@ export type TutorResponse = {
   masteryBand: "beginner" | "intermediate" | "advanced";
   source: "ai" | "fallback";
 };
+
+const TUTOR_API_BASE_URL = "http://localhost:8003";
 
 /**
  * Tutor v3
@@ -114,11 +118,24 @@ async function tryGenerateWithAI(input: TutorAIInput): Promise<string | null> {
 
   console.log("[FS] tutor v3 AI prompt", prompt);
 
-  // TODO later:
-  // - send prompt to backend/serverless endpoint
-  // - return model-generated explanation string
-  // - if generation fails, return null
+  console.log("[FS] calling tutor API",{
+    concept: input.concept,
+    masteryBand: input.masteryBand,
+    interests: input.interests
+  });
 
+  const body = await fetchTutorExplanation(TUTOR_API_BASE_URL,{
+    concept:input.concept,
+    interests:input.interests,
+    mastery: input.mastery,
+    masteryBand: input.masteryBand,
+    pageTitle: input.pageTitle
+  });
+  if (body){
+    console.log("[FS] tutor AI generation succeeded");
+    return body;
+  }
+  console.log("[FS] tutor AI generation unavailable, using fallback")
   return null;
 }
 
