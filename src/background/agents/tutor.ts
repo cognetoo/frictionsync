@@ -19,7 +19,7 @@ export type TutorResponse = {
   source: "ai" | "fallback";
 };
 
-const TUTOR_API_BASE_URL = "http://localhost:8003";
+const TUTOR_API_BASE_URL = "https://frictionsync.onrender.com";
 
 /**
  * Tutor v3

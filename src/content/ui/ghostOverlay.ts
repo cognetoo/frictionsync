@@ -101,27 +101,30 @@ export function showGhostOverlay(
     .close {
       all: unset;
       cursor: pointer;
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       border-radius: 999px;
-      color: rgba(15, 23, 42, 0.55);
       font-size: 12px;
-      line-height: 1;
+      font-weight: 700;
+      color: #475569;
+      background: rgba(15,23,42,0.05);
+      transition: background 120ms ease, color 120ms ease, transform 120ms ease;
     }
 
     .close:hover {
-      background: rgba(15, 23, 42, 0.07);
-      color: rgba(15, 23, 42, 0.88);
+      background: rgba(15,23,42,0.15);
+      color: #0f172a;
+      transform: scale(1.05);
     }
   `;
 
   const chip = document.createElement("div");
   chip.className = "chip";
   chip.innerHTML = `
-    <span class="label">Simplify</span>
+    <span class="label">✨ Simplify</span>
     <button class="close" title="Dismiss" aria-label="Dismiss">✕</button>
   `;
 
