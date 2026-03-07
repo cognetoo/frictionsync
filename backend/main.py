@@ -48,6 +48,7 @@ class TutorExplainRequest(BaseModel):
     mastery: int
     masteryBand: Literal["beginner", "intermediate", "advanced"]
     pageTitle: Optional[str] = None
+    contextTerms: List[str] = []
 
 
 class TutorExplainResponse(BaseModel):
@@ -60,21 +61,24 @@ class TutorExplainResponse(BaseModel):
 def build_tutor_prompt(payload: TutorExplainRequest) -> str:
     interests_text = ", ".join(payload.interests) if payload.interests else "none provided"
     page_title = payload.pageTitle or "unknown"
+    context_terms = ", ".join(payload.contextTerms) if payload.contextTerms else "none"
 
     return f"""
 You are FrictionSync, an adaptive tutor inside a browser extension.
 
-Your job is to explain ONE concept based on the user's mastery level and interests.
+Your job is to explain ONE concept based on the user's mastery level, interests, and page context.
 
 Concept: {payload.concept}
 Mastery score: {payload.mastery}
 Mastery band: {payload.masteryBand}
 User interests: {interests_text}
 Page title: {page_title}
+Context terms: {context_terms}
 
 Rules:
 - Keep the answer to 2 to 4 sentences.
 - Be specific to the concept.
+- Use page title and context terms if they help make the explanation more specific.
 - Do not give generic filler.
 - Do not use bullet points.
 - Do not use headings.
@@ -95,7 +99,6 @@ Style guidance by mastery:
 
 Now generate the explanation.
 """.strip()
-
 
 def fallback_explanation(payload: TutorExplainRequest) -> str:
     concept = payload.concept.strip().lower()
@@ -148,6 +151,7 @@ def tutor_explain(payload: TutorExplainRequest):
 
     try:
         print("[FrictionSync backend] tutor request:",payload.model_dump())
+        print("[FrictionSync backend] build prompt: \n",prompt)
         body = call_gemini(prompt)
 
         # lightweight validation

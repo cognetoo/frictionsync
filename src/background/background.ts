@@ -157,7 +157,13 @@ const lastResolvedTime = lastResolvedConceptTimeByTab.get(tabId) ?? 0;
       // Run Agent B (Tutor) to generate a response
       const pageTitle = sender.tab?.title ?? undefined;
       const contextTerms = buildTutorContextTerms(ctx.hoverTerms, decision.concept);
-      const response = await tutor({ concept: decision.concept }, profile);
+
+      console.log("[FS] tutor context payload",{
+        concept: decision.concept,
+        pageTitle,
+        contextTerms
+      });
+      const response = await tutor({ concept: decision.concept,pageTitle,contextTerms }, profile);
       console.log("[FS] tutor response", response);
 
       // Remember last concept for this tab (so feedback updates correct mastery)

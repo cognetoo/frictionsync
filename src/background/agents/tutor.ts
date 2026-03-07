@@ -45,7 +45,8 @@ export async function tutor(
     interests: profile.interests,
     mastery,
     masteryBand,
-    pageTitle: req.pageTitle
+    pageTitle: req.pageTitle,
+    contextTerms: req.contextTerms
   });
 
   if (aiBody) {
@@ -106,6 +107,7 @@ type TutorAIInput = {
   mastery: number;
   masteryBand: "beginner" | "intermediate" | "advanced";
   pageTitle?: string;
+  contextTerms? : string[];
 };
 
 /**
@@ -121,7 +123,9 @@ async function tryGenerateWithAI(input: TutorAIInput): Promise<string | null> {
   console.log("[FS] calling tutor API",{
     concept: input.concept,
     masteryBand: input.masteryBand,
-    interests: input.interests
+    interests: input.interests,
+    pageTitle: input.pageTitle,
+    contextTerms: input.contextTerms ?? []
   });
 
   const body = await fetchTutorExplanation(TUTOR_API_BASE_URL,{
@@ -129,7 +133,8 @@ async function tryGenerateWithAI(input: TutorAIInput): Promise<string | null> {
     interests:input.interests,
     mastery: input.mastery,
     masteryBand: input.masteryBand,
-    pageTitle: input.pageTitle
+    pageTitle: input.pageTitle,
+    contextTerms: input.contextTerms ?? []
   });
   if (body){
     console.log("[FS] tutor AI generation succeeded");
@@ -144,6 +149,10 @@ async function tryGenerateWithAI(input: TutorAIInput): Promise<string | null> {
  * This is the key part of Tutor v3 design.
  */
 export function buildTutorPrompt(input: TutorAIInput): string {
+
+const contextTerms = input.contextTerms && input.contextTerms.length > 0 ? 
+  input.contextTerms.join(", ") : "none";
+
   const interests =
     input.interests.length > 0 ? input.interests.join(", ") : "none provided";
 
@@ -154,6 +163,7 @@ export function buildTutorPrompt(input: TutorAIInput): string {
     `Mastery band: ${input.masteryBand}`,
     `User interests: ${interests}`,
     `Page title: ${input.pageTitle ?? "unknown"}`,
+    `Context terms: ${contextTerms}`,
     "",
     "Instructions:",
     "- Explain the concept at the user's current mastery level.",
