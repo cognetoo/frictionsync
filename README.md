@@ -24,6 +24,13 @@ This creates a **proactive AI tutor** instead of a normal chatbot.
 
 ---
 
+### Demo 
+![Tutor Bubble](Bubble.png)
+
+![Extension Popup](Popup.png)
+
+![Simplify effect](Simplify.png)
+
 # Core Features
 
 ## Behavioral Friction Detection
@@ -130,7 +137,7 @@ User Feedback
         │
         ▼
 Auditor Agent
-(master y update)
+(mastery update)
 ```
 
 ---
@@ -422,6 +429,16 @@ Mastery increases.
 Future explanations become more concise.
 
 ---
+
+## Skills Demonstrated
+
+- Agentic AI system design
+- Retrieval-Augmented Generation (RAG)
+- Vector search with FAISS
+- LLM orchestration
+- Chrome extension development
+- Backend API design with FastAPI
+- Full-stack deployment
 
 # Future Improvements
 

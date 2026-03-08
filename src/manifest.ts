@@ -5,9 +5,9 @@ const manifest: ManifestV3Export = {
   name: "FrictionSync",
   version: "0.1.0",
   description:
-    "Local-first friction detection + personalized analogies + mastery tracking.",
+ "Detects learning friction while browsing and provides short AI explanations based on the page context.",
   permissions: ["storage", "tabs"],
-  host_permissions: ["<all_urls>","http://localhost:8003/*"],
+  host_permissions: ["<all_urls>","https://frictionsync.onrender.com/*"],
   background: {
     service_worker: "src/background/background.ts",
     type: "module"
