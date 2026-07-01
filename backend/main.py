@@ -5,30 +5,25 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import google.generativeai as genai
-
+from google import genai
 
 # ----------------------------
-# Environment + Gemini setup
+# Environment
 # ----------------------------
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
-    raise RuntimeError("Missing GEMINI_API_KEY in backend/.env")
+    raise RuntimeError("Missing GEMINI_API_KEY")
 
-genai.configure(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Good fast model for this use case
 MODEL_NAME = "gemini-2.5-flash"
-model = genai.GenerativeModel(MODEL_NAME)
-
 
 # ----------------------------
-# FastAPI app
+# FastAPI
 # ----------------------------
 app = FastAPI(title="FrictionSync Tutor API")
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,9 +33,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # ----------------------------
-# Request / Response models
+# Models
 # ----------------------------
 class TutorExplainRequest(BaseModel):
     concept: str
@@ -57,86 +51,60 @@ class TutorExplainResponse(BaseModel):
 
 
 # ----------------------------
-# Helpers
+# Prompt
 # ----------------------------
 def build_tutor_prompt(payload: TutorExplainRequest) -> str:
-    interests_text = ", ".join(payload.interests) if payload.interests else "none provided"
-    page_title = payload.pageTitle or "unknown"
-    context_terms = ", ".join(payload.contextTerms) if payload.contextTerms else "none"
-    sentence_context = payload.sentenceContext or "none"
+    interests = ", ".join(payload.interests) if payload.interests else "none"
 
     return f"""
 You are FrictionSync, an adaptive tutor inside a browser extension.
 
-Your job is to explain ONE concept based on the user's mastery level, interests, and page context.
-
 Concept: {payload.concept}
-Mastery score: {payload.mastery}
-Mastery band: {payload.masteryBand}
-User interests: {interests_text}
-Page title: {page_title}
-Context terms: {context_terms}
-Sentence context: {sentence_context}
+Mastery: {payload.masteryBand}
+User interests: {interests}
+Page title: {payload.pageTitle}
+Context terms: {", ".join(payload.contextTerms)}
+Sentence context: {payload.sentenceContext}
+
+Explain this concept naturally.
 
 Rules:
-- Keep the answer to 2 to 4 sentences.
-- Be specific to the concept.
-- Use page title, context terms, and sentence context if they help make the explanation more specific.
-- Prefer grounding in the sentence context when it is relevant.
-- Do not give generic filler.
-- Do not use bullet points.
-- Do not use headings.
-- Use plain, readable English.
-- Prefer one natural analogy only if it genuinely helps.
-- If the user's mastery is advanced, reduce analogy use and be more technical.
-- If the user's mastery is beginner, explain with intuition first, then mechanism.
-- If the user's mastery is intermediate, connect intuition to the actual mechanism.
-- Avoid choosing weak or trivial comparisons.
-- If user interests are useful, use the most natural one.
-- Do not mention mastery score directly.
-- Return only the explanation text.
+- 2-4 sentences.
+- Beginner -> intuition first.
+- Intermediate -> intuition then mechanism.
+- Advanced -> concise and technical.
+- Use ONE analogy only if useful.
+- Do NOT use markdown.
+- Do NOT use headings.
+- Return ONLY the explanation.
+"""
 
-Style guidance by mastery:
-- beginner: intuitive, approachable, low jargon
-- intermediate: mechanism-focused with some intuition
-- advanced: concise, technical, high signal
 
-Now generate the explanation.
-""".strip()
-
-def fallback_explanation(payload: TutorExplainRequest) -> str:
-    concept = payload.concept.strip().lower()
-
-    if payload.masteryBand == "beginner":
-        return (
-            f"{concept} is best understood first by asking what it does, what information it depends on, "
-            f"and what effect it has. Start with the role it plays before trying to memorize deeper internal details."
-        )
-
-    if payload.masteryBand == "intermediate":
-        return (
-            f"{concept} should be understood as a mechanism, not just a definition. "
-            f"Focus on what inputs it uses, what rule or process it applies, and what output or decision it produces."
-        )
-
+def fallback(payload: TutorExplainRequest):
     return (
-        f"{concept} should be analyzed in terms of its role, internal mechanism, "
-        f"and downstream effect on system behavior."
+        f"{payload.concept} is a concept that becomes easier to understand once "
+        f"you first learn what problem it solves before studying how it works internally."
     )
 
 
-def call_gemini(prompt: str) -> str:
-    response = model.generate_content(
-        prompt,
-        generation_config={
-            "temperature": 0.7,
-            "max_output_tokens": 220,
-        },
+# ----------------------------
+# Gemini
+# ----------------------------
+def call_gemini(prompt: str):
+
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=prompt,
     )
 
-    text = getattr(response, "text", None)
-    if not text or not text.strip():
-        raise ValueError("Gemini returned empty text")
+    print("========== GEMINI ==========")
+    print(response)
+    print("============================")
+
+    text = response.text
+
+    if not text:
+        raise Exception("Empty Gemini response")
 
     return text.strip()
 
@@ -150,20 +118,16 @@ def health():
 
 
 @app.post("/api/tutor-explain", response_model=TutorExplainResponse)
-def tutor_explain(payload: TutorExplainRequest):
-    prompt = build_tutor_prompt(payload)
+def tutor(payload: TutorExplainRequest):
 
     try:
-        print("[FrictionSync backend] tutor request:",payload.model_dump())
-        print("[FrictionSync backend] build prompt: \n",prompt)
-        body = call_gemini(prompt)
+        body = call_gemini(build_tutor_prompt(payload))
 
-        # lightweight validation
-        if len(body.strip()) < 20:
-            raise ValueError("Generated response too short")
+        if len(body) < 20:
+            raise Exception("Too short")
 
         return TutorExplainResponse(body=body)
 
-    except Exception as err:
-        print("[FrictionSync backend] Gemini failed, using fallback:", err)
-        return TutorExplainResponse(body=fallback_explanation(payload))
+    except Exception as e:
+        print(e)
+        return TutorExplainResponse(body=fallback(payload))

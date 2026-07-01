@@ -226,6 +226,10 @@ const lastResolvedTime = lastResolvedConceptTimeByTab.get(tabId) ?? 0;
         // Mark this intervention as active before sending
         activeInterventionKeyByTab.set(tabId, interventionKey);
 
+        console.log("FULL RESPONSE BODY");
+        console.log(response.body);
+        console.log(response.body.length);
+
         // Send intervention bubble to content script UI
         await sendIntervention(tabId, response);
 
